@@ -1,13 +1,13 @@
-"""Historia rynku opcji Deribit odtworzona z publicznego archiwum transakcji (history.deribit.com, bez klucza, od 2018).
+"""Deribit options market history rebuilt from the public trade archive (history.deribit.com, no key, since 2018).
 
-Na każdy dzień (UTC) bierzemy do 3 próbek po 1000 transakcji opcjami BTC (od 00:00, 08:00 i 16:00) i z transakcji z terminem
-14–60 dni liczymy (delta z modelu Blacka dla podanej przy transakcji zmienności implikowanej):
-  rr25   - asymetria 25-delta: mediana zmienności opcji kupna (delta 0,15–0,35) minus opcji sprzedaży (delta −0,35…−0,15), w pkt,
-  atm    - zmienność „przy cenie” (opcje kupna z deltą 0,4–0,6),
-  pcr    - stosunek wolumenu opcji sprzedaży do kupna (wszystkie terminy w próbce),
-  ntrades - ile transakcji weszło do policzenia.
-Liczymy tak samo dla przeszłości i co dzień na bieżąco, więc szereg jest spójny w czasie (H13 używa tej wersji).
-Wynik: data/opt_hist.csv (dopisywany dzień po dniu)."""
+For each day (UTC) we take up to 3 samples of 1,000 BTC option trades (from 00:00, 08:00 and 16:00), and from trades expiring
+in 14 to 60 days we compute (delta from the Black model for the implied volatility given with the trade):
+  rr25   - 25-delta skew: median volatility of calls (delta 0.15 to 0.35) minus puts (delta -0.35 to -0.15), in points,
+  atm    - "at the money" volatility (calls with delta 0.4 to 0.6),
+  pcr    - ratio of put volume to call volume (all expiries in the sample),
+  ntrades - how many trades went into the calculation.
+We compute it the same way for the past and every day going forward, so the series is consistent over time (H13 uses this version).
+Output: data/opt_hist.csv (appended day by day)."""
 import math
 import sys
 import time
@@ -94,9 +94,9 @@ def update(max_days=None, verbose=True):
         pd.DataFrame([s]).to_csv(OUT, mode="a", header=not OUT.exists() or OUT.stat().st_size == 0, index=False, float_format="%.4g")
         done += 1
         if verbose and done % 100 == 0:
-            print(f"  opcje: {done}/{len(days)} dni, {time.time() - t0:.0f}s", flush=True)
+            print(f"  options: {done}/{len(days)} days, {time.time() - t0:.0f}s", flush=True)
     if verbose:
-        print(f"  [OK   ] Deribit (historia opcji): {done} nowych dni, {time.time() - t0:.0f}s", flush=True)
+        print(f"  [OK   ] Deribit (options history): {done} new days, {time.time() - t0:.0f}s", flush=True)
     return load()
 
 
@@ -104,7 +104,7 @@ def load():
     if not OUT.exists():
         return None
     d = pd.read_csv(OUT, parse_dates=["date"]).drop_duplicates("date", keep="last").set_index("date").sort_index()
-    d["rr25"] = d["rr25"].where(d["rr25"].abs() <= 60)           # pojedyncze błędne wyceny (np. −420 pkt) usuwamy
+    d["rr25"] = d["rr25"].where(d["rr25"].abs() <= 60)           # we remove single bad quotes (e.g. -420 points)
     d["atm"] = d["atm"].where(d["atm"].between(5, 400))
     return d
 

@@ -1,13 +1,14 @@
-"""Osobny tor kierunku (punkt 12 planu): szansa, że za 7 dni cena będzie wyższa, liczona wprost z potwierdzonych sygnałów.
+"""Separate direction track (item 12 of the plan): the chance that the price will be higher in 7 days, computed directly from confirmed signals.
 
-Dlaczego osobno: główny test metod porównuje cały rozkład (7 kwantyli), a słaby, ale prawdziwy sygnał kierunku przesuwa
-rozkład tak mało, że tego testu nie może zdać (sygnał wielkości H7 daje ok. 0,8% poprawy przy progu 2%). Tu oceniamy tylko kierunek.
-Model: regresja logistyczna na średniej ze sprawdzonych z góry sygnałów (dziś trend 28 dni i ich połączenie), dopasowywana co tydzień
-tylko na wynikach już znanych; prognoza codziennie od 2015. Ocena: wynik Briera względem stałej historycznej częstości wzrostów
-(liczonej tylko z przeszłości), test DM z poprawką HLN, trafność kierunku.
-Reguła (spisana 2026-10-31, przed wynikami): szansa z tego toru zastępuje 50% na panelu tylko, jeśli bije stałą częstość
-z p < 0,10 i przed 2024-10-29, i na egzaminie. Uwaga: sygnały potwierdziliśmy na całej historii, więc okres „przed” nie jest
-czysty; jedynym czystym sprawdzianem jest egzamin i przyszłość."""
+Why separately: the main method test compares the whole distribution (7 quantiles), and a weak but real direction signal shifts
+the distribution so little that it cannot pass that test (a signal the size of H7 gives about 0.8% improvement against a 2% threshold).
+Here we judge only the direction.
+Model: logistic regression on the average of signals checked in advance (today the 28-day trend and their combination), refitted every week
+only on outcomes already known; a forecast every day since 2015. Scoring: Brier score against the fixed historical rate of rises
+(computed only from the past), DM test with the HLN correction, direction hit rate.
+Rule (written down 2026-10-31, before the results): the chance from this track replaces 50% on the dashboard only if it beats the fixed rate
+with p < 0.10 both before 2024-10-29 and on the exam. Note: we confirmed the signals on the whole history, so the "before" period is not
+clean; the only clean check is the exam and the future."""
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression

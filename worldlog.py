@@ -1,7 +1,7 @@
-"""Dziennik świata: dzień po dniu, co się działo (Wikipedia: Portal Current events, od 2011).
+"""World event log: what happened, day by day (Wikipedia: Portal Current events, since 2011).
 
-Surowe wpisy trzymamy w plikach rocznych (data/worldlog/RRRR.json.gz), a do analiz powstaje zwarty szereg dzienny
-(data/worldlog_daily.csv): liczba wpisów w kategoriach i liczba wpisów z danymi słowami kluczowymi."""
+Raw entries are kept in yearly files (data/worldlog/YYYY.json.gz), and for analysis we build a compact daily series
+(data/worldlog_daily.csv): the number of entries in each category and the number of entries containing given keywords."""
 import gzip
 import json
 import re
@@ -20,7 +20,7 @@ START = pd.Timestamp("2011-08-17")
 UA = {"User-Agent": "btc-predictor/1.0 (research; wywigacz@users.noreply.github.com)"}
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
-CATS = {  # nagłówek Wikipedii -> krótki klucz
+CATS = {  # Wikipedia heading -> short key
     "armed conflicts and attacks": "armed", "business and economy": "biz", "disasters and accidents": "disaster",
     "international relations": "intl", "law and crime": "law", "politics and elections": "pol",
     "health and environment": "health", "science and technology": "sci", "arts and culture": "arts", "sports": "sport",
@@ -55,7 +55,7 @@ def _page(day):
 
 
 def _flatten_split(parts):
-    """re.split z dwiema grupami zwraca [tekst, g1, g2, tekst, ...]; sprowadzamy to do [tekst, nazwa, tekst, nazwa, ...]."""
+    """re.split with two groups returns [text, g1, g2, text, ...]; we reduce that to [text, name, text, name, ...]."""
     out = [parts[0]]
     for i in range(1, len(parts) - 2, 3):
         out.append(parts[i] if parts[i] is not None else parts[i + 1])
@@ -64,8 +64,8 @@ def _flatten_split(parts):
 
 
 def parse_day(html_):
-    """Zwraca {kategoria: [wpisy liściowe]} z HTML strony dnia."""
-    # starsze strony: <div class="current-events-content-heading">, nowsze: <p><b>Kategoria</b></p>
+    """Returns {category: [leaf entries]} from the HTML of a day page."""
+    # older pages: <div class="current-events-content-heading">, newer ones: <p><b>Category</b></p>
     parts = re.split(r'<div[^>]*current-events-content-heading[^>]*>(.*?)</div>|<p><b>(.*?)</b>\s*</p>', html_, flags=re.S)
     parts = [p for p in _flatten_split(parts)]
     out = {}
@@ -73,7 +73,7 @@ def parse_day(html_):
         name = re.sub(r"<[^>]+>", "", parts[i]).strip().lower()
         key = CATS.get(name, "other")
         items = []
-        for m in re.finditer(r"<li>((?:(?!<li>|</li>|<ul>|</ul>).)*)</li>", parts[i + 1], flags=re.S):     # tylko liście listy
+        for m in re.finditer(r"<li>((?:(?!<li>|</li>|<ul>|</ul>).)*)</li>", parts[i + 1], flags=re.S):     # only the leaves of the list
             raw = m.group(1)
             t = re.sub(r"<[^>]+>", "", raw)
             t = re.sub(r"\s+", " ", t).strip()
@@ -123,16 +123,16 @@ def save_year(y, data):
 
 
 def update(last_day, budget_s=1e9, workers=6, verbose=True):
-    """Dociąga brakujące dni do last_day. Dni już zapisane są pomijane (można przerwać i wznowić)."""
+    """Fetches the missing days up to last_day. Days already saved are skipped (you can stop and resume)."""
     t0 = time.time()
     days = pd.date_range(START, last_day)
     data = {y: load_year(y) for y in sorted(set(days.year))}
     todo = [d for d in days if d.strftime("%Y-%m-%d") not in data[d.year]]
-    # dni z ostatnich 3 dni odświeżamy (wpisy bywają uzupełniane z opóźnieniem)
+    # we refresh the last 3 days (entries are sometimes added with a delay)
     recent = [d for d in days[-3:] if d not in todo]
     todo += recent
     if verbose:
-        print(f"  dziennik świata: do pobrania {len(todo)} dni", flush=True)
+        print(f"  world event log: {len(todo)} days to fetch", flush=True)
     s = requests.Session()
     s.headers.update(UA)
     done = 0
@@ -150,7 +150,7 @@ def update(last_day, budget_s=1e9, workers=6, verbose=True):
             for y, v in data.items():
                 save_year(y, v)
             if verbose:
-                print(f"  ... {done}/{len(todo)} dni, {time.time() - t0:.0f}s", flush=True)
+                print(f"  ... {done}/{len(todo)} days, {time.time() - t0:.0f}s", flush=True)
         time.sleep(0.4)
     for y, v in data.items():
         save_year(y, v)
@@ -158,7 +158,7 @@ def update(last_day, budget_s=1e9, workers=6, verbose=True):
 
 
 def build_daily(index):
-    """Szereg dzienny: liczba wpisów w kategoriach i z kluczowymi słowami (dla skanera)."""
+    """Daily series: number of entries per category and with keywords (for the scanner)."""
     rows = {}
     for y in sorted(set(index.year)):
         for day, cats in load_year(y).items():
@@ -182,7 +182,7 @@ def save_daily(index):
 
 
 def day_headlines(day, per=2):
-    """Najważniejsze wpisy dnia (do pokazania przy dużych ruchach): po kilka z biznesu, polityki, konfliktów."""
+    """The day's most important entries (to show next to big moves): a few each from business, politics and conflicts."""
     d = pd.Timestamp(day)
     cats = load_year(d.year).get(d.strftime("%Y-%m-%d"), {})
     out = []

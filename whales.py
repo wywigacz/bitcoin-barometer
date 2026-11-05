@@ -1,13 +1,13 @@
-"""Ruchy dużych graczy: przepływy do funduszy ETF na bitcoina, zakupy i sprzedaże firmy Strategy (MicroStrategy),
-pozycje najlepszych i najgorszych traderów na giełdzie Hyperliquid (wszystkie pozycje są tam publiczne).
+"""Big-player moves: flows into Bitcoin ETFs, purchases and sales by Strategy (MicroStrategy),
+and positions of the best and worst traders on the Hyperliquid exchange (all positions there are public).
 
-Źródła (bez kluczy):
-  - TFTC Bitcoin ETF Tracker, licencja CC BY 4.0 (dane dzienne od SoSoValue): https://www.tftc.io/bitcoin-etf-flows
-  - Bitbo, tabela transakcji Strategy (zgodna z raportami 8-K w SEC): https://bitbo.io/treasuries/microstrategy/
-  - Hyperliquid, publiczne API /info i ranking traderów.
+Sources (no API keys):
+  - TFTC Bitcoin ETF Tracker, CC BY 4.0 licence (daily data from SoSoValue): https://www.tftc.io/bitcoin-etf-flows
+  - Bitbo, Strategy transaction table (matches the 8-K filings with the SEC): https://bitbo.io/treasuries/microstrategy/
+  - Hyperliquid, public /info API and trader leaderboard.
 
-Wynik: data/whales.csv (dzienny) oraz data/hl_snapshots.csv (zdjęcia pozycji co 6 godzin; historii nie da się pobrać wstecz,
-więc nagrywamy ją od 2026-10-29). Te szeregi NIE trafiają do dużego skanera; testuje je osobno confirm.py."""
+Output: data/whales.csv (daily) and data/hl_snapshots.csv (position snapshots every 6 hours; the history cannot be downloaded
+retroactively, so we have been recording it since 2026-10-29). These series do NOT go into the big scanner; confirm.py tests them separately."""
 import re
 import time
 
@@ -21,7 +21,7 @@ OUT = C.DATA_DIR / "whales.csv"
 SNAP = C.DATA_DIR / "hl_snapshots.csv"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"}
 HL = "https://api.hyperliquid.xyz/info"
-TOP = 150          # tylu najlepszych i tylu najgorszych traderów śledzimy w każdym zdjęciu
+TOP = 150          # how many of the best and of the worst traders we follow in each snapshot
 
 
 def _get(url, **kw):
@@ -33,7 +33,7 @@ def _get(url, **kw):
         except requests.RequestException:
             pass
         time.sleep(2 * (i + 1))
-    raise RuntimeError(f"brak odpowiedzi: {url[:90]}")
+    raise RuntimeError(f"no response: {url[:90]}")
 
 
 def _hl(body):
@@ -80,15 +80,15 @@ def strategy():
             fmt = "%m/%d/%Y" if len(c[0].split("/")[2]) == 4 else "%m/%d/%y"
             rows.append((pd.to_datetime(c[0], format=fmt), btc, total))
     if len(rows) < 50:
-        raise RuntimeError(f"tabela Strategy: tylko {len(rows)} wierszy")
+        raise RuntimeError(f"Strategy table: only {len(rows)} rows")
     d = pd.DataFrame(rows, columns=["date", "btc", "total"]).groupby("date").agg({"btc": "sum", "total": "last"}).sort_index()
-    # tabela pomija część drobnych transakcji, ale stan po każdym raporcie jest pełny: zmianę liczymy z różnicy stanów
+    # the table skips some small transactions, but the holdings after each report are complete: we compute the change from the difference in holdings
     chg = d["total"].diff().fillna(d["total"].iloc[0])
     return pd.DataFrame({"w_mstr_btc": chg, "w_mstr_total": d["total"]})
 
 
 def hl_funding(since):
-    """Stawka finansowania BTC na Hyperliquid (co godzinę, od maja 2023), uśredniana do dnia."""
+    """BTC funding rate on Hyperliquid (hourly, since May 2023), averaged per day."""
     start = int(pd.Timestamp(since).timestamp() * 1000)
     acc = []
     for _ in range(200):
@@ -104,11 +104,11 @@ def hl_funding(since):
     if not acc:
         return pd.Series(dtype=float)
     s = pd.Series({pd.Timestamp(int(r["time"]), unit="ms"): float(r["fundingRate"]) for r in acc})
-    return s.groupby(s.index.normalize()).mean() * 24 * 365 * 100     # w % rocznie
+    return s.groupby(s.index.normalize()).mean() * 24 * 365 * 100     # in % per year
 
 
 def hl_snapshot():
-    """Zdjęcie pozycji na BTC: najlepsi traderzy (największy zysk w całej historii konta) kontra najgorsi."""
+    """Snapshot of BTC positions: the best traders (largest all-time account profit) versus the worst."""
     lb = _get("https://stats-data.hyperliquid.xyz/Mainnet/leaderboard").json()["leaderboardRows"]
     rows = []
     for r in lb:
@@ -154,18 +154,18 @@ def hl_daily():
     g = s.groupby("day").mean(numeric_only=True)
     out = pd.DataFrame(index=g.index)
     for grp in ("smart", "dumb"):
-        out[f"w_hl_{grp}"] = g[f"{grp}_net_usd"] / g["oi_usd"] * 100            # pozycja netto grupy jako % całego rynku BTC na Hyperliquid
+        out[f"w_hl_{grp}"] = g[f"{grp}_net_usd"] / g["oi_usd"] * 100            # the group's net position as % of the whole BTC market on Hyperliquid
         out[f"w_hl_{grp}_longpct"] = g[f"{grp}_long"] / (g[f"{grp}_long"] + g[f"{grp}_short"]).replace(0, np.nan) * 100
     out["w_hl_oi"] = g["oi_usd"]
     return out
 
 
-# Znane portfele: każdy adres sprawdzony na blockchainie z publicznymi raportami (data, kwota) przed dodaniem (2026-10-29).
+# Known wallets: every address was checked on the blockchain against public reports (date, amount) before being added (2026-10-29).
 ENTITIES = {
-    # rząd USA: adres, na który 3.11.2020 trafiło 69 369 BTC odebranych hakerowi „Individual X” (DOJ; Arkham)
+    # US government: the address that received 69,369 BTC seized from the hacker “Individual X” on Nov 3, 2020 (DOJ; Arkham)
     "w_ent_us": ["bc1qa5wkgaew2dkv56kfvj49j0av5nml45x9ek9hz6"],
-    # Niemcy, policja BKA (sprawa Movie2k): 5 portfeli źródłowych (łącznie 49 859 BTC, raporty: 49 858) i 2 portfele przekaźnikowe;
-    # sprzedaż 19.06–12.07.2024 (Arkham, CoinDesk, heise)
+    # Germany, BKA police (Movie2k case): 5 source wallets (49,859 BTC in total, reports say 49,858) and 2 relay wallets;
+    # sold Jun 19 - Jul 12, 2024 (Arkham, CoinDesk, heise)
     "w_ent_de": ["bc1qss8z846643h8ct2e8rzkwwslrt3ns874vtv93w", "bc1qgrvchamnmmaancn3vwea6elnvexpylzh30rhjz", "bc1qnwft8re0tkkyekd4nl34dqvgmwx3zsfyxfadfg",
                  "bc1q9agtd4sk5r06vqcsy3ewdr0dslf03dlj3agtva", "bc1q93njc4we4s088a2nz6c9e6vthc5h4ake53rxmd",
                  "bc1qq0l4jgg9rcm3puhhfwaz4c9t8hdee8hfz6738z", "bc1q0unygz3ddt8x0v33s6ztxkrnw0s0tl7zk4yxwd"],
@@ -190,7 +190,7 @@ def _mp(path):
 
 
 def _addr_deltas(a, known):
-    """Nowe transakcje adresu (od najnowszych, do pierwszej już znanej): {txid: [czas, zmiana salda w BTC]}."""
+    """New transactions of an address (newest first, up to the first one already known): {txid: [time, balance change in BTC]}."""
     new, last = {}, None
     while True:
         page = _mp(f"/address/{a}/txs/chain" + (f"/{last}" if last else ""))
@@ -222,7 +222,7 @@ def entities():
         s = pd.Series([d for _, d in ev], index=pd.to_datetime([t for t, _ in ev], unit="s").normalize())
         out[name] = s.groupby(level=0).sum().sort_index().cumsum().clip(lower=0)
     ENT_CACHE.write_text(json.dumps(cache), encoding="utf-8")
-    # Salwador sam publikuje wszystkie adresy rezerwy (Narodowe Biuro Bitcoina, bitcoin.gob.sv, przez API mempool.space)
+    # El Salvador publishes all its reserve addresses itself (National Bitcoin Office, bitcoin.gob.sv, via the mempool.space API)
     j = _get("https://bitcoin.gob.sv/api/v1/wallet/ONBTC").json()
     ev = [(t["time"], t["value"] / 1e8) for w in j.values() for t in w.get("transactions", [])]
     s = pd.Series([d for _, d in ev], index=pd.to_datetime([t for t, _ in ev], unit="s").normalize())
@@ -233,7 +233,7 @@ def entities():
 
 
 def stable_peg():
-    """Dzienne ceny USDT i USDC (DefiLlama, od końca 2020). Premia ponad 1 USD bywa oznaką ucieczki od ryzyka do „cyfrowej gotówki”."""
+    """Daily USDT and USDC prices (DefiLlama, since late 2020). A premium above 1 USD can be a sign of a flight from risk into “digital cash”."""
     j = _get("https://stablecoins.llama.fi/stablecoinprices").json()
     rows = [(pd.Timestamp(int(r["date"]), unit="s").normalize(), r["prices"].get("tether"), r["prices"].get("usd-coin")) for r in j if r["date"] > 0]
     d = pd.DataFrame(rows, columns=["date", "w_usdt_px", "w_usdc_px"]).dropna(how="all", subset=["w_usdt_px", "w_usdc_px"])
@@ -245,9 +245,9 @@ RR_SNAP = C.DATA_DIR / "options_rr.csv"
 
 
 def options_rr():
-    """Asymetria opcji (risk reversal 25-delta) dla terminu najbliższego 30 dniom: zmienność opcji kupna minus sprzedaży
-    o tej samej „odległości” od ceny. Dodatnia: rynek płaci więcej za zakłady na wzrost. Historii nie ma za darmo,
-    więc zapisujemy zdjęcie przy każdej aktualizacji (od 2026-10-29)."""
+    """Options skew (25-delta risk reversal) for the expiry closest to 30 days: implied volatility of calls minus puts
+    at the same “distance” from the price. Positive: the market pays more for bets on a rise. The history is not available
+    for free, so we save a snapshot at every update (since 2026-10-29)."""
     from scipy.stats import norm
     res = _get("https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=BTC&kind=option").json()["result"]
     now = pd.Timestamp.now(tz="UTC").tz_localize(None)
@@ -267,14 +267,14 @@ def options_rr():
             continue
     O = pd.DataFrame(rows, columns=["exp", "T", "cp", "K", "F", "iv", "delta"])
     if O.empty:
-        raise RuntimeError("Deribit: brak opcji")
+        raise RuntimeError("Deribit: no options")
     exp = O.groupby("exp")["T"].first()
     e = (exp - 30 / 365).abs().idxmin()
     E = O[O["exp"] == e]
     c = E[(E["cp"] == "C") & (E["K"] > E["F"])].sort_values("delta")
     p = E[(E["cp"] == "P") & (E["K"] < E["F"])].sort_values("delta")
     if len(c) < 3 or len(p) < 3:
-        raise RuntimeError("Deribit: za mało opcji do interpolacji")
+        raise RuntimeError("Deribit: too few options to interpolate")
     ivc = float(np.interp(0.25, c["delta"], c["iv"]))
     ivp = float(np.interp(-0.25, p["delta"], p["iv"]))
     atm = float(E.iloc[(E["K"] - E["F"]).abs().argsort()[:2]]["iv"].mean())
@@ -290,21 +290,21 @@ def options_rr():
 def update(verbose=True):
     old = pd.read_csv(OUT, index_col=0, parse_dates=True) if OUT.exists() else pd.DataFrame()
     parts, status = [], []
-    jobs = [("ETF na bitcoina (TFTC)", etf), ("Strategy: zakupy i sprzedaże BTC (Bitbo)", strategy),
-            ("Hyperliquid: stawka finansowania", lambda: hl_funding(old["w_hl_fund"].dropna().index.max() - pd.Timedelta(days=3)
+    jobs = [("Bitcoin ETFs (TFTC)", etf), ("Strategy: BTC purchases and sales (Bitbo)", strategy),
+            ("Hyperliquid: funding rate", lambda: hl_funding(old["w_hl_fund"].dropna().index.max() - pd.Timedelta(days=3)
                                                                     if "w_hl_fund" in old and old["w_hl_fund"].notna().any() else "2023-05-01").rename("w_hl_fund").to_frame()),
-            ("Hyperliquid: pozycje najlepszych i najgorszych traderów", lambda: (hl_snapshot(), hl_daily())[1]),
-            ("Portfele rządów USA, Niemiec i Salwadoru (blockchain)", entities),
-            ("Ceny stablecoinów USDT i USDC (DefiLlama)", stable_peg),
-            ("Asymetria opcji 25-delta (Deribit, zdjęcie)", options_rr)]
+            ("Hyperliquid: positions of the best and worst traders", lambda: (hl_snapshot(), hl_daily())[1]),
+            ("Government wallets of the US, Germany and El Salvador (blockchain)", entities),
+            ("USDT and USDC stablecoin prices (DefiLlama)", stable_peg),
+            ("25-delta options skew (Deribit, snapshot)", options_rr)]
     for name, fn in jobs:
         t0 = time.time()
         try:
             r = fn()
             parts.append(r)
-            status.append((name, "OK", f"{r.shape[1]} szeregów, {r.notna().any(axis=1).sum()} dni, {time.time() - t0:.0f}s"))
+            status.append((name, "OK", f"{r.shape[1]} series, {r.notna().any(axis=1).sum()} days, {time.time() - t0:.0f}s"))
         except Exception as e:
-            status.append((name, "BŁĄD", str(e)[:120]))
+            status.append((name, "ERROR", str(e)[:120]))
     if verbose:
         for s in status:
             print(f"  [{s[1]:5}] {s[0]}: {s[2]}", flush=True)

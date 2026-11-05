@@ -1,4 +1,4 @@
-"""Pobieranie danych z darmowych, publicznych API (bez kluczy)."""
+"""Downloading data from free, public APIs (no keys)."""
 import io
 import time
 
@@ -39,8 +39,8 @@ def _today():
 
 
 def fetch_price(since):
-    """Bitstamp: dzienne świece BTC/USD od 2011. Tylko zamknięte dni UTC: bez tego parametru giełda zwraca też
-    bieżącą, niedokończoną świecę, a wtedy prognoza i dziennik liczyłyby się od ceny z środka dnia."""
+    """Bitstamp: daily BTC/USD candles since 2011. Only closed UTC days: without this parameter the exchange also returns
+    the current, unfinished candle, and then the forecast and the log would start from a mid-day price."""
     start = int(pd.Timestamp(since).timestamp()) if since is not None else 1313625600
     close, vol, hi, lo = {}, {}, {}, {}
     for _ in range(25):
@@ -56,12 +56,12 @@ def fetch_price(since):
             break
         start = int(arr[-1]["timestamp"]) + 86400
     if not close:
-        raise RuntimeError("Bitstamp: brak danych")
+        raise RuntimeError("Bitstamp: no data")
     return {"close": _ser(close), "volume": _ser(vol), "high": _ser(hi), "low": _ser(lo)}
 
 
 def fetch_coinmetrics(since):
-    """CoinMetrics community: MVRV, aktywne adresy, podaż."""
+    """CoinMetrics community: MVRV, active addresses, supply."""
     metrics = {"mvrv": "CapMVRVCur", "adr": "AdrActCnt", "supply": "SplyCur"}
     start = pd.Timestamp(since).strftime("%Y-%m-%d") if since is not None else "2011-01-01"
     out, errs = {}, []
@@ -86,7 +86,7 @@ def fetch_coinmetrics(since):
 
 
 def fetch_blockchain(since):
-    """blockchain.com: hash rate i przychody górników (USD)."""
+    """blockchain.com: hash rate and miner revenue (USD)."""
     if since is None:
         span = "all"
     else:
@@ -133,7 +133,7 @@ def fetch_stable(since):
 
 
 def fetch_okx(since):
-    """Funding rate (dzienna średnia z ~30 dni) i open interest (migawka z dziś)."""
+    """Funding rate (daily average over ~30 days) and open interest (today's snapshot)."""
     out = {}
     j = _get("https://www.okx.com/api/v5/public/funding-rate-history?instId=BTC-USDT-SWAP&limit=100").json()
     df = pd.DataFrame(j["data"])
@@ -151,7 +151,7 @@ def fetch_global(since):
 
 
 def fetch_m2(since):
-    """Opcjonalnie: M2 USA z FRED (bywa niedostępny, wtedy sygnał jest pomijany)."""
+    """Optional: US M2 from FRED (sometimes unavailable, then the signal is skipped)."""
     r = _get("https://fred.stlouisfed.org/graph/fredgraph.csv?id=WM2NS", timeout=15, tries=1)
     df = pd.read_csv(io.StringIO(r.text))
     s = pd.Series(pd.to_numeric(df.iloc[:, 1], errors="coerce").values, index=pd.to_datetime(df.iloc[:, 0]))
@@ -163,7 +163,7 @@ WIKI = {"en": "Bitcoin", "de": "Bitcoin", "fr": "Bitcoin", "es": "Bitcoin", "ru"
 
 
 def fetch_wiki(since):
-    """Uwaga na Wikipedii (artykuł o Bitcoinie) w wielu językach, jako przybliżenie nastrojów regionów."""
+    """Attention on Wikipedia (the Bitcoin article) in many languages, as a rough gauge of regional mood."""
     start = "20150701" if since is None else (pd.Timestamp(since) - pd.Timedelta(days=5)).strftime("%Y%m%d")
     end = _today().strftime("%Y%m%d")
     out = {}
@@ -176,12 +176,12 @@ def fetch_wiki(since):
         except Exception:
             pass
     if not out:
-        raise RuntimeError("Wikipedia: brak danych")
+        raise RuntimeError("Wikipedia: no data")
     return out
 
 
 def fetch_kimchi(since):
-    """BTC/KRW z Upbit (Korea): do liczenia premii kimchi względem ceny w USD i kursu USD/KRW."""
+    """BTC/KRW from Upbit (Korea): for computing the kimchi premium against the USD price and the USD/KRW rate."""
     cutoff = pd.Timestamp("2017-10-01") if since is None else pd.Timestamp(since) - pd.Timedelta(days=5)
     d, to = {}, None
     for _ in range(40):
@@ -200,7 +200,7 @@ def fetch_kimchi(since):
 
 
 def fetch_deribit(since):
-    """DVOL (implikowana zmienność, od 2021) i stosunek put/call z otwartych pozycji opcji (migawka)."""
+    """DVOL (implied volatility, since 2021) and the put/call ratio from options open interest (snapshot)."""
     out = {}
     end = int(time.time() * 1000)
     start = 1616000000000 if since is None else int(pd.Timestamp(since).timestamp() * 1000) - 5 * 86400000
@@ -223,7 +223,7 @@ def fetch_deribit(since):
 
 
 def fetch_cftc(since):
-    """CFTC (tygodniowo): pozycjonowanie funduszy lewarowanych na kontraktach BTC na CME."""
+    """CFTC (weekly): positioning of leveraged funds in BTC futures on the CME."""
     url = ("https://publicreporting.cftc.gov/resource/gpe5-46if.json?$limit=2000&$order=report_date_as_yyyy_mm_dd%20DESC"
            "&$where=market_and_exchange_names%20like%20%27BITCOIN%20-%20CHICAGO%25%27")
     rows = _get(url, timeout=40).json()
@@ -235,14 +235,14 @@ def fetch_cftc(since):
         except (KeyError, ValueError, ZeroDivisionError):
             continue
     if not d:
-        raise RuntimeError("CFTC: brak danych")
+        raise RuntimeError("CFTC: no data")
     s = _ser(d)
-    s.index = s.index + pd.Timedelta(days=3)          # stan z wtorku CFTC publikuje w piątek: bez podglądania przyszłości
+    s.index = s.index + pd.Timedelta(days=3)          # CFTC publishes the Tuesday snapshot on Friday: no peeking into the future
     return {"cot_lev": s}
 
 
 def fetch_coinbase(since):
-    """Dzienne zamknięcia Coinbase (USD): z nich premia Coinbase względem ceny z Bitstamp (popyt z USA)."""
+    """Daily Coinbase closes (USD): from them the Coinbase premium over the Bitstamp price (US demand)."""
     end = _today() + pd.Timedelta(days=1)
     start = pd.Timestamp("2015-07-20") if since is None else pd.Timestamp(since) - pd.Timedelta(days=5)
     d = {}
@@ -257,7 +257,7 @@ def fetch_coinbase(since):
 
 
 def fetch_bybit(since):
-    """Historia stawek za lewar na kontraktach wieczystych Bybit (od 2020), średnia dzienna."""
+    """History of funding rates on Bybit perpetual contracts (since 2020), daily average."""
     end = int(time.time() * 1000)
     stop_at = int(pd.Timestamp("2020-03-26" if since is None else since).timestamp() * 1000)
     rows = []
@@ -272,19 +272,19 @@ def fetch_bybit(since):
             break
         time.sleep(0.2)
     if not rows:
-        raise RuntimeError("Bybit: brak danych")
+        raise RuntimeError("Bybit: no data")
     s = pd.Series({pd.Timestamp(t, unit="ms"): v for t, v in rows}).sort_index()
     return {"bfund": s.groupby(s.index.normalize()).mean()}
 
 
-JOBS = [("Bitstamp (cena)", fetch_price), ("CoinMetrics (MVRV, adresy)", fetch_coinmetrics),
-        ("Blockchain.com (hash rate, przychody)", fetch_blockchain), ("Fear & Greed", fetch_fng),
-        ("Yahoo (makro, złoto)", fetch_yahoo), ("DefiLlama (stablecoiny)", fetch_stable),
-        ("OKX (funding, OI)", fetch_okx), ("CoinGecko (dominacja)", fetch_global),
-        ("Wikipedia (uwaga wg języków)", fetch_wiki), ("Upbit (premia kimchi)", fetch_kimchi),
-        ("Deribit (DVOL, put/call)", fetch_deribit), ("CFTC (pozycje CME)", fetch_cftc),
-        ("Coinbase (premia USA)", fetch_coinbase), ("Bybit (stawki za lewar)", fetch_bybit),
-        ("FRED (M2, opcjonalnie)", fetch_m2)]
+JOBS = [("Bitstamp (price)", fetch_price), ("CoinMetrics (MVRV, addresses)", fetch_coinmetrics),
+        ("Blockchain.com (hash rate, revenue)", fetch_blockchain), ("Fear & Greed", fetch_fng),
+        ("Yahoo (macro, gold)", fetch_yahoo), ("DefiLlama (stablecoins)", fetch_stable),
+        ("OKX (funding, OI)", fetch_okx), ("CoinGecko (dominance)", fetch_global),
+        ("Wikipedia (attention by language)", fetch_wiki), ("Upbit (kimchi premium)", fetch_kimchi),
+        ("Deribit (DVOL, put/call)", fetch_deribit), ("CFTC (CME positions)", fetch_cftc),
+        ("Coinbase (US premium)", fetch_coinbase), ("Bybit (funding rates)", fetch_bybit),
+        ("FRED (M2, optional)", fetch_m2)]
 
 
 def fetch_all(since=None):
@@ -295,5 +295,5 @@ def fetch_all(since=None):
             data.update(r)
             status.append((name, "OK", ", ".join(f"{k}→{v.index.max():%Y-%m-%d}" for k, v in r.items())))
         except Exception as e:
-            status.append((name, "BŁĄD", str(e)[:160]))
+            status.append((name, "ERROR", str(e)[:160]))
     return data, status

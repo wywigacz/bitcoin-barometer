@@ -1,10 +1,10 @@
-"""Szerokie śledzenie akcji i obligacji: wszystkie spółki S&P 500 + ~110 funduszy ETF (kraje, sektory, style, obligacje, surowce).
+"""Broad tracking of stocks and bonds: every S&P 500 company + ~110 ETFs (countries, sectors, styles, bonds, commodities).
 
-Z tego liczymy:
-  * miary "pod maską" rynku (szerokość, rozproszenie, średnia korelacja, krzywa rentowności, spread kredytowy, relacje ETF),
-  * sieć powiązań z BTC (z czym porusza się w tych samych tygodniach),
-  * analogie struktury powiązań: kiedy zestaw korelacji BTC z rynkami wyglądał jak dziś.
-Surowe ceny (duży plik) nie trafiają do repozytorium; w chmurze są pobierane od nowa przy każdej aktualizacji."""
+From this we compute:
+  * "under the hood" market measures (breadth, dispersion, average correlation, yield curve, credit spread, ETF ratios),
+  * a network of links with BTC (what it moves with in the same weeks),
+  * analogues of the link structure: when the set of BTC correlations with markets looked like today.
+Raw prices (a large file) are not stored in the repository; in the cloud they are downloaded afresh at every update."""
 import io
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -21,62 +21,62 @@ SP500 = C.DATA_DIR / "sp500.csv"
 UA = {"User-Agent": "Mozilla/5.0 (btc-predictor)"}
 
 ETF = {
-    # obligacje
-    "SHY": "Obligacje USA 1-3 lata", "IEI": "Obligacje USA 3-7 lat", "IEF": "Obligacje USA 7-10 lat", "TLT": "Obligacje USA 20+ lat",
-    "TIP": "Obligacje USA indeksowane inflacją", "AGG": "Obligacje USA (cały rynek)", "LQD": "Obligacje korporacyjne (inwestycyjne)",
-    "HYG": "Obligacje śmieciowe (wysokie ryzyko)", "JNK": "Obligacje śmieciowe (SPDR)", "EMB": "Obligacje rynków wschodzących (USD)",
-    "BNDX": "Obligacje spoza USA", "BWX": "Obligacje rządów świata", "MUB": "Obligacje komunalne USA", "MBB": "Obligacje hipoteczne USA",
-    "BKLN": "Kredyty lewarowane", "FLOT": "Obligacje o zmiennym oprocentowaniu",
-    # szeroki rynek i style
-    "SPY": "S&P 500", "QQQ": "Nasdaq 100", "IWM": "Małe spółki USA", "DIA": "Dow Jones", "RSP": "S&P 500 równoważony", "MDY": "Średnie spółki USA",
-    "IWD": "Spółki wartościowe", "IWF": "Spółki wzrostowe", "MTUM": "Momentum", "QUAL": "Jakość", "USMV": "Niska zmienność",
-    "SPHB": "Wysoka beta", "SPLV": "Niska zmienność S&P",
-    # sektory
-    "XLB": "Surowce (sektor)", "XLC": "Komunikacja", "XLE": "Energetyka", "XLF": "Finanse", "XLI": "Przemysł", "XLK": "Technologia",
-    "XLP": "Dobra podstawowe", "XLRE": "Nieruchomości", "XLU": "Użyteczność publiczna", "XLV": "Ochrona zdrowia", "XLY": "Dobra luksusowe",
-    # tematy
-    "SMH": "Półprzewodniki", "SOXX": "Półprzewodniki (iShares)", "IGV": "Oprogramowanie", "ARKK": "Innowacje (ARK)", "KWEB": "Chiński internet",
-    "IBB": "Biotechnologia", "XBI": "Biotechnologia (małe)", "ITB": "Budownictwo mieszkaniowe", "KRE": "Banki regionalne", "KBE": "Banki",
-    "XRT": "Handel detaliczny", "JETS": "Linie lotnicze", "ICLN": "Czysta energia", "TAN": "Energia słoneczna", "URA": "Uran",
-    "LIT": "Lit i baterie", "GDX": "Kopalnie złota", "SIL": "Kopalnie srebra", "BLOK": "Spółki blockchain", "WGMI": "Kopalnie bitcoina",
-    # kraje
-    "EWJ": "Japonia", "EWZ": "Brazylia", "EWG": "Niemcy", "EWU": "Wielka Brytania", "EWQ": "Francja", "EWI": "Włochy", "EWP": "Hiszpania",
-    "EWC": "Kanada", "EWA": "Australia", "EWY": "Korea Płd.", "EWT": "Tajwan", "EWH": "Hongkong", "FXI": "Chiny (duże)", "MCHI": "Chiny (MSCI)",
-    "INDA": "Indie", "EWW": "Meksyk", "TUR": "Turcja", "EZA": "RPA", "EIS": "Izrael", "KSA": "Arabia Saudyjska", "ARGT": "Argentyna",
-    "VNM": "Wietnam", "EPOL": "Polska", "EWS": "Singapur", "EIDO": "Indonezja", "THD": "Tajlandia", "EEM": "Rynki wschodzące", "VGK": "Europa",
-    # surowce i waluty
-    "GLD": "Złoto", "SLV": "Srebro", "USO": "Ropa", "UNG": "Gaz ziemny", "DBC": "Koszyk surowców", "DBA": "Rolnictwo", "CPER": "Miedź",
-    "UUP": "Dolar amerykański", "FXE": "Euro", "FXY": "Jen", "FXF": "Frank szwajcarski",
+    # bonds
+    "SHY": "US Treasuries 1-3 years", "IEI": "US Treasuries 3-7 years", "IEF": "US Treasuries 7-10 years", "TLT": "US Treasuries 20+ years",
+    "TIP": "US inflation-linked bonds", "AGG": "US bonds (whole market)", "LQD": "Corporate bonds (investment grade)",
+    "HYG": "Junk bonds (high risk)", "JNK": "Junk bonds (SPDR)", "EMB": "Emerging market bonds (USD)",
+    "BNDX": "Non-US bonds", "BWX": "World government bonds", "MUB": "US municipal bonds", "MBB": "US mortgage bonds",
+    "BKLN": "Leveraged loans", "FLOT": "Floating-rate bonds",
+    # broad market and styles
+    "SPY": "S&P 500", "QQQ": "Nasdaq 100", "IWM": "US small caps", "DIA": "Dow Jones", "RSP": "S&P 500 equal weight", "MDY": "US mid caps",
+    "IWD": "Value stocks", "IWF": "Growth stocks", "MTUM": "Momentum", "QUAL": "Quality", "USMV": "Low volatility",
+    "SPHB": "High beta", "SPLV": "S&P low volatility",
+    # sectors
+    "XLB": "Materials (sector)", "XLC": "Communication", "XLE": "Energy", "XLF": "Financials", "XLI": "Industrials", "XLK": "Technology",
+    "XLP": "Consumer staples", "XLRE": "Real estate", "XLU": "Utilities", "XLV": "Health care", "XLY": "Consumer discretionary",
+    # themes
+    "SMH": "Semiconductors", "SOXX": "Semiconductors (iShares)", "IGV": "Software", "ARKK": "Innovation (ARK)", "KWEB": "Chinese internet",
+    "IBB": "Biotech", "XBI": "Biotech (small)", "ITB": "Homebuilders", "KRE": "Regional banks", "KBE": "Banks",
+    "XRT": "Retail", "JETS": "Airlines", "ICLN": "Clean energy", "TAN": "Solar", "URA": "Uranium",
+    "LIT": "Lithium and batteries", "GDX": "Gold miners", "SIL": "Silver miners", "BLOK": "Blockchain companies", "WGMI": "Bitcoin miners",
+    # countries
+    "EWJ": "Japan", "EWZ": "Brazil", "EWG": "Germany", "EWU": "United Kingdom", "EWQ": "France", "EWI": "Italy", "EWP": "Spain",
+    "EWC": "Canada", "EWA": "Australia", "EWY": "South Korea", "EWT": "Taiwan", "EWH": "Hong Kong", "FXI": "China (large caps)", "MCHI": "China (MSCI)",
+    "INDA": "India", "EWW": "Mexico", "TUR": "Turkey", "EZA": "South Africa", "EIS": "Israel", "KSA": "Saudi Arabia", "ARGT": "Argentina",
+    "VNM": "Vietnam", "EPOL": "Poland", "EWS": "Singapore", "EIDO": "Indonesia", "THD": "Thailand", "EEM": "Emerging markets", "VGK": "Europe",
+    # commodities and currencies
+    "GLD": "Gold", "SLV": "Silver", "USO": "Oil", "UNG": "Natural gas", "DBC": "Commodity basket", "DBA": "Agriculture", "CPER": "Copper",
+    "UUP": "US dollar", "FXE": "Euro", "FXY": "Yen", "FXF": "Swiss franc",
 }
-RATIOS = {  # relacje, które często opisują nastroje (rynek ryzyka vs bezpieczne przystanie)
-    "credit": ("HYG", "IEF", "Apetyt na ryzyko w obligacjach (śmieciowe vs skarbowe)"),
-    "term": ("TLT", "SHY", "Długie vs krótkie obligacje"),
-    "infl": ("TIP", "IEF", "Oczekiwania inflacyjne (TIPS vs skarbowe)"),
-    "small": ("IWM", "SPY", "Małe vs duże spółki"),
-    "growth": ("IWF", "IWD", "Wzrostowe vs wartościowe"),
-    "beta": ("SPHB", "SPLV", "Wysoka beta vs niska zmienność"),
-    "em": ("EEM", "SPY", "Rynki wschodzące vs USA"),
-    "semis": ("SMH", "SPY", "Półprzewodniki vs rynek"),
-    "banks": ("KRE", "SPY", "Banki regionalne vs rynek"),
-    "homes": ("ITB", "SPY", "Budownictwo vs rynek"),
-    "cugold": ("CPER", "GLD", "Miedź vs złoto (koniunktura)"),
-    "miners": ("GDX", "GLD", "Kopalnie złota vs złoto"),
-    "discr": ("XLY", "XLP", "Dobra luksusowe vs podstawowe"),
-    "china": ("KWEB", "SPY", "Chiński internet vs USA"),
+RATIOS = {  # ratios that often describe the mood (risk assets vs safe havens)
+    "credit": ("HYG", "IEF", "Risk appetite in bonds (junk vs Treasuries)"),
+    "term": ("TLT", "SHY", "Long vs short bonds"),
+    "infl": ("TIP", "IEF", "Inflation expectations (TIPS vs Treasuries)"),
+    "small": ("IWM", "SPY", "Small vs large caps"),
+    "growth": ("IWF", "IWD", "Growth vs value"),
+    "beta": ("SPHB", "SPLV", "High beta vs low volatility"),
+    "em": ("EEM", "SPY", "Emerging markets vs US"),
+    "semis": ("SMH", "SPY", "Semiconductors vs the market"),
+    "banks": ("KRE", "SPY", "Regional banks vs the market"),
+    "homes": ("ITB", "SPY", "Homebuilders vs the market"),
+    "cugold": ("CPER", "GLD", "Copper vs gold (economic cycle)"),
+    "miners": ("GDX", "GLD", "Gold miners vs gold"),
+    "discr": ("XLY", "XLP", "Discretionary vs staples"),
+    "china": ("KWEB", "SPY", "Chinese internet vs US"),
 }
-LEVELS = {"breadth200": "Odsetek spółek S&P 500 powyżej średniej 200 dni", "breadth50": "Odsetek spółek powyżej średniej 50 dni",
-          "dispersion": "Rozproszenie zwrotów spółek (30 dni)", "avgcorr": "Jak mocno akcje poruszają się razem (średnia korelacja 60 dni)",
-          "updown": "Odsetek spółek na plusie w tygodniu", "curve": "Krzywa rentowności (10 lat minus 3 miesiące)"}
+LEVELS = {"breadth200": "Share of S&P 500 companies above their 200-day average", "breadth50": "Share of companies above their 50-day average",
+          "dispersion": "Dispersion of company returns (30 days)", "avgcorr": "How closely stocks move together (60-day average correlation)",
+          "updown": "Share of companies up over the week", "curve": "Yield curve (10 years minus 3 months)"}
 
 
-INTL = {  # indeks: (strona Wikipedii, kolumna symbolu, przelicznik na symbol Yahoo, kraj)
-    "DAX": ("DAX", "Ticker", lambda t: t, "Niemcy"), "Euro Stoxx 50": ("Euro_Stoxx_50", "Ticker", lambda t: t, "Strefa euro"),
-    "CAC 40": ("CAC_40", "Ticker", lambda t: t, "Francja"), "AEX": ("AEX_index", "Ticker", lambda t: t, "Holandia"),
-    "IBEX 35": ("IBEX_35", "Ticker", lambda t: t, "Hiszpania"), "FTSE 100": ("FTSE_100_Index", "Ticker", lambda t: t.replace(".", "-").rstrip("-") + ".L", "Wielka Brytania"),
-    "Hang Seng": ("Hang_Seng_Index", "Ticker", lambda t: t.split(":")[-1].strip().zfill(4) + ".HK", "Hongkong"),
-    "TSX 60": ("S%26P/TSX_60", "Symbol", lambda t: t.replace(".", "-") + ".TO", "Kanada"), "Nifty 50": ("NIFTY_50", "Symbol", lambda t: t + ".NS", "Indie"),
-    "ASX 50": ("S%26P/ASX_50", "Symbol", lambda t: t + ".AX", "Australia"), "SMI": ("Swiss_Market_Index", "Ticker", lambda t: t + ".SW", "Szwajcaria"),
-    "KOSPI 200": ("KOSPI_200", "Symbol", lambda t: str(t).zfill(6) + ".KS", "Korea Płd."), "Bovespa": ("List_of_companies_listed_on_B3", "Ticker", lambda t: t + ".SA", "Brazylia"),
+INTL = {  # index: (Wikipedia page, symbol column, converter to Yahoo symbol, country)
+    "DAX": ("DAX", "Ticker", lambda t: t, "Germany"), "Euro Stoxx 50": ("Euro_Stoxx_50", "Ticker", lambda t: t, "Eurozone"),
+    "CAC 40": ("CAC_40", "Ticker", lambda t: t, "France"), "AEX": ("AEX_index", "Ticker", lambda t: t, "Netherlands"),
+    "IBEX 35": ("IBEX_35", "Ticker", lambda t: t, "Spain"), "FTSE 100": ("FTSE_100_Index", "Ticker", lambda t: t.replace(".", "-").rstrip("-") + ".L", "United Kingdom"),
+    "Hang Seng": ("Hang_Seng_Index", "Ticker", lambda t: t.split(":")[-1].strip().zfill(4) + ".HK", "Hong Kong"),
+    "TSX 60": ("S%26P/TSX_60", "Symbol", lambda t: t.replace(".", "-") + ".TO", "Canada"), "Nifty 50": ("NIFTY_50", "Symbol", lambda t: t + ".NS", "India"),
+    "ASX 50": ("S%26P/ASX_50", "Symbol", lambda t: t + ".AX", "Australia"), "SMI": ("Swiss_Market_Index", "Ticker", lambda t: t + ".SW", "Switzerland"),
+    "KOSPI 200": ("KOSPI_200", "Symbol", lambda t: str(t).zfill(6) + ".KS", "South Korea"), "Bovespa": ("List_of_companies_listed_on_B3", "Ticker", lambda t: t + ".SA", "Brazil"),
 }
 INTL_CSV = C.DATA_DIR / "intl.csv"
 NAME_COLS = ("Company", "Name", "Company name")
@@ -152,7 +152,7 @@ def update(workers=8, verbose=True):
     C.DATA_DIR.mkdir(exist_ok=True)
     px.to_csv(RAW, float_format="%.6g", compression="gzip")
     if verbose:
-        print(f"  rynki: {px.shape[1]} szeregów ({len(fails)} braków), {time.time() - t0:.0f}s", flush=True)
+        print(f"  markets: {px.shape[1]} series ({len(fails)} missing), {time.time() - t0:.0f}s", flush=True)
     return px, sp
 
 
@@ -163,7 +163,7 @@ def load():
 
 
 def features(px, sp):
-    """Miary "pod maską" rynku, dzień po dniu (tylko z przeszłości)."""
+    """"Under the hood" market measures, day by day (using only the past)."""
     stocks = [s for s in sp["Symbol"] if s in px.columns]
     S = px[stocks]
     f = pd.DataFrame(index=px.index)
@@ -172,7 +172,7 @@ def features(px, sp):
     lr = np.log(S).diff()
     f["dispersion"] = np.log(S / S.shift(21)).std(axis=1)
     f["updown"] = (S / S.shift(5) > 1).where(S.shift(5).notna()).mean(axis=1) * 100
-    # średnia korelacja z wariancji portfela równoważonego: rho = (n^2 Var(EW) - sum var) / ((sum sd)^2 - sum var)
+    # average correlation from the variance of an equal-weight portfolio: rho = (n^2 Var(EW) - sum var) / ((sum sd)^2 - sum var)
     w = 60
     v_i = lr.rolling(w, min_periods=40).var()
     sd_i = np.sqrt(v_i)
@@ -189,7 +189,7 @@ def features(px, sp):
 
 
 def comove(df, px, sp, weeks=104):
-    """Z czym BTC porusza się w tych samych tygodniach (korelacja zwrotów tygodniowych, ostatnie 2 lata)."""
+    """What BTC moves with in the same weeks (correlation of weekly returns, last 2 years)."""
     btc = df["close"].resample("W-FRI").last()
     P = px.resample("W-FRI").last()
     r_b = np.log(btc).diff().tail(weeks)
@@ -202,8 +202,8 @@ def comove(df, px, sp, weeks=104):
     sector = dict(zip(sp["Symbol"], sp["GICS Sector"]))
     tab = pd.DataFrame({"sym": corr.index, "r": corr.values})
     tab["name"] = tab["sym"].map(names)
-    tab["kind"] = np.where(tab["sym"].isin(list(ETF)), "fundusz", "spółka")
-    sec = tab[tab["kind"] == "spółka"].assign(sector=lambda t: t["sym"].map(sector)).groupby("sector")["r"].mean().sort_values(ascending=False)
+    tab["kind"] = np.where(tab["sym"].isin(list(ETF)), "fund", "company")
+    sec = tab[tab["kind"] == "company"].assign(sector=lambda t: t["sym"].map(sector)).groupby("sector")["r"].mean().sort_values(ascending=False)
     bonds = [k for k in ("SHY", "IEI", "IEF", "TLT", "TIP", "AGG", "LQD", "HYG", "JNK", "EMB", "BNDX", "MUB", "MBB", "BKLN") if k in corr.index]
     return {"top": tab.sort_values("r", ascending=False).head(15), "bottom": tab.sort_values("r").head(8),
             "sectors": sec, "bonds": tab[tab["sym"].isin(bonds)].sort_values("r", ascending=False), "n": int(len(tab))}
@@ -214,12 +214,12 @@ KEY = ["SPY", "QQQ", "IWM", "TLT", "IEF", "HYG", "LQD", "GLD", "UUP", "EEM", "XL
 
 
 def corr_analogs(df, px, win=90, top=8, gap=90):
-    """'Analogie analogii': okresy, gdy zestaw korelacji BTC z 25 kluczowymi rynkami wyglądał jak dziś."""
+    """'Analogues of analogues': periods when the set of BTC correlations with 25 key markets looked like today."""
     keys = [k for k in KEY if k in px.columns]
     P = px[keys].reindex(df.index).ffill(limit=4)
     rb = np.log(df["close"]).diff()
     R = np.log(P).diff()
-    mask = R.abs().sum(axis=1) > 0                            # dni sesyjne
+    mask = R.abs().sum(axis=1) > 0                            # trading days
     rb, R = rb[mask], R[mask]
     cor = pd.DataFrame({k: rb.rolling(win, min_periods=int(win * 0.8)).corr(R[k]) for k in keys}).dropna(how="any")
     if len(cor) < 500:

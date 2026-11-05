@@ -1,144 +1,144 @@
-# Plan: co jeszcze można zrobić, żeby Barometr lepiej przewidywał
+# Plan: What Else Can Be Done to Make the Barometer Predict Better
 
-Spisany 30 października 2026. Powstał tak: osiem niezależnych „perspektyw” (dźwignia, opcje, dane z łańcucha, uwaga i nastroje, rynki zakładów, metody kierunku, metody ryzyka, portfel oraz audyt naszego kodu) zgłosiło 52 pomysły; każdą grupę ocenił osobny sceptyk z dostępem do badań (dowody, szansa przejścia naszego protokołu, największe ryzyko); liczby, które o czymś przesądzały, policzyłem sam od nowa na naszych danych, a źródła danych sprawdziłem, naprawdę je pobierając. Pomysły, których nie dało się potwierdzić, są na końcu, z powodami.
+Written on Oct 30, 2026. Here is how it came about: eight independent "perspectives" (leverage, options, on-chain data, attention and sentiment, prediction markets, direction methods, risk methods, portfolio, and an audit of our code) submitted 52 ideas. Each group was evaluated by a separate skeptic with access to research (evidence, chances of passing our protocol, biggest risks). The decisive numbers were recalculated from scratch on our own data, and the data sources were verified by actually downloading them. The ideas that could not be confirmed are listed at the end, along with the reasons.
 
-## Odpowiedź wprost
+## The Direct Answer
 
-**Kierunku ceny nie poprawimy większą ilością danych.** To nie jest wniosek z jednego testu, tylko z trzech niezależnych rund (skaner 8,5 tys. testów, 13 hipotez spisanych z góry, teraz 52 pomysły przepuszczone przez sceptyków). Jedyne, co ma dowody w badaniach, to słaby trend (nasza H7), a jego siła maleje z roku na rok. Doszła do tego ważna rzecz o nas samych: nasz próg dopuszczenia metody do prognozy (2% poprawy straty pinball) matematycznie wymaga przewidywalnego przesunięcia o 0,2 odchylenia, czyli R² około 4%. Sygnał wielkości H7 (0,13 odchylenia) daje tylko 0,84%. Czyli „szansa wzrostu 50%” jest po części cechą naszej miary, nie tylko rynku. Osobny tor dla kierunku (punkt 11) mógłby pokazać trafność 52–54%, ale udowodnienie tego poza próbą zajmie lata (moc testu na odciętych 2 latach: około 15%). Realistycznie: 50% zostanie na panelu jeszcze długo i to jest uczciwe.
+**We will not improve price direction with more data.** This is not a conclusion from a single test, but from three independent rounds (a scanner of 8,500 tests, 13 pre-registered hypotheses, and now 52 ideas reviewed by skeptics). The only thing supported by research is a weak trend (our H7), and its strength is declining year by year. On top of that, we uncovered an important fact about our own setup: our threshold for admitting a method into the forecast (a 2% improvement in pinball loss) mathematically requires a predictable shift of 0.2 standard deviations, which means an R² of around 4%. A signal the size of H7 (0.13 standard deviations) provides only 0.84%. This means that a "50% chance of an increase" is partly a feature of our evaluation metric, not just the market itself. A separate track for direction (point 11) could show an accuracy of 52% to 54%, but proving this out of sample will take years (the statistical power of the test over the held-out 2 years is around 15%). Realistically, 50% will stay on the dashboard for a long time, and that is honest.
 
-**Zakres, ryzyko i prawdopodobieństwa da się poprawić, i to tanio.** Zmienność jest jedyną rzeczą, którą ten system naprawdę przewiduje (korelacja 0,50 między naszą prognozą a tym, co się stało tydzień później). Trzy rzeczy potwierdzone dziś trzykrotnie (agent, sceptyk, ja): pasma na 90–180 dni są za wąskie w spokojnych okresach, „dotknięcie poziomu” liczymy po zamknięciach dnia, choć panel obiecuje „choć raz po drodze”, i brakuje produktu „tydzień spokojny czy burzliwy”, który ma mierzalną skuteczność.
+**Range, risk, and probabilities can be improved, and cheaply.** Volatility is the only thing this system genuinely predicts (a 0.50 correlation between our forecast and what actually happened a week later). Three things were confirmed three times today (by the agent, the skeptic, and myself): the 90 to 180-day bands are too narrow during calm periods; "touching a level" is calculated using daily closes, even though the dashboard promises "at least once along the way"; and we are missing a "calm or stormy week" product, which has measurable predictive power.
 
-**Portfel wymaga uczciwszego opisu, zanim cokolwiek do niego dodamy.** Aktywny portfel bije regularne kupowanie tylko w 48% dwuletnich okien od 2014 roku (mediana 0,994). Płytszy dołek w 97% okien (średnio o 7,9 pkt proc.) wynika głównie z tego, że trzyma mniej bitcoina: stały udział 65% daje podobne obsunięcie. Przewaga „+47% nad DCA od 2018” zależy od wyboru okna trendu (28 dni: 1,47; 112 dni: 0,64). Strategia „ryzyko” sama przegrywa z DCA (0,78).
+**The portfolio needs a more honest description before we add anything to it.** The active portfolio beats regular dollar-cost averaging (DCA) in only 48% of two-year windows since 2014 (median 0.994). A shallower drawdown in 97% of windows (by an average of 7.9 percentage points) is mainly due to holding less Bitcoin: a fixed 65% allocation gives a similar drawdown. The "+47% edge over DCA since 2018" depends heavily on the choice of the trend window (28 days: 1.47; 112 days: 0.64). The "risk" strategy on its own loses to DCA (0.78).
 
-**Dwie nowe, wieloletnie historie danych, których nie mieliśmy, są dostępne za darmo:** pozycjonowanie na Binance od września 2020 (co 5 minut) i transakcje opcjami na Deribit od 2018 roku. Warto je dodać, ale jako sygnały ryzyka krachu i do kalibracji pasm, nie jako przepowiednie kierunku; dla kierunku spodziewamy się odrzucenia.
+**Two new multi-year historical datasets that we did not have are available for free:** Binance positioning data since September 2020 (at 5-minute intervals) and Deribit options trades since 2018. They are worth adding, but as crash risk signals and for calibrating bands, not as directional forecasts; for direction, we expect them to be rejected.
 
-## Co naprawiłem już dziś (błędy znalezione przez audyt)
+## What I Fixed Today (Bugs Found by the Audit)
 
-1. **Kolumna pozycji funduszy na CME (`cot_lev`)** zawierała w 88% wierszy liczby odsłon włoskiej Wikipedii (pozostałość pomieszania kolumn z 29 października). Odbudowana z nowego pobrania z CFTC, datowana na dzień publikacji (piątek, 3 dni po stanie z wtorku), ze strażnikiem zakresu.
-2. **Niedokończona świeca dnia.** Bitstamp zwracał też bieżący, niezamknięty dzień, więc prognozy i dziennik na żywo liczyły się od ceny z środka dnia (horyzont „7 dni” był naprawdę około 7,6 dnia). Teraz pobieramy tylko zamknięte dni UTC, a panel podpisuje cenę datą zamknięcia.
+1. **The CME leveraged funds positioning column (`cot_lev`)** contained Italian Wikipedia page view numbers in 88% of its rows (a leftover from column mixing on Oct 29). It was rebuilt from a fresh CFTC download, dated to the publication day (Friday, 3 days after Tuesday's cutoff), with a range guard.
+2. **Unfinished daily candle.** Bitstamp was also returning the current, unfinished day, so live forecasts and the journal were calculated using an intraday price (the "7-day" horizon was actually around 7.6 days). Now we only fetch closed UTC days, and the dashboard labels the price with the closing date.
 
-## Stan wdrożenia
+## Implementation Status
 
-- 30.10.2026: punkty 1–3 wdrożone (pasma zależne od stanu zmienności na 7/30/90 dni, „Spokojnie czy burzliwie?”, dotknięcia po maksimach i minimach dnia).
-- 30.10.2026: punkty 7–9 wdrożone (dźwignia Binance i hipotezy H15–H17, sędzia z Polymarket i Kalshi, historia opcji Deribit od 2018 dla H13). Wynik sędziego: rynek zakładów zgaduje dotknięcia lepiej niż nasz model (Brier 0,131 vs 0,160 w ostatnich 2 latach).
-- 31.10.2026: punkty 10–13 wdrożone. Wyścig HAR-RV/HARQ na pasmach 1/3/7 dni: nikt nie zdał (przewaga ≤ 0,4%, p > 0,18). Partia 6 (zmienność): H18 skok uwagi i H21 udział opłat potwierdzone (słabo, korelacja 0,11 i 0,15), H19 przepływy giełdowe działają odwrotnie, H20 ton newsów odrzucony. Tor kierunku nie zdał (przewaga w Brierze −0,07% przed, +0,33% po, p 0,55 i 0,36), więc zostaje 50%. Podatek: przewaga aktywnego portfela nad regularnym kupowaniem od 2018 to 1,13 po podatku i odsetkach (1,12 przed).
-- 30.10.2026: punkty 4–6 wdrożone (krok dzienny dla 1/3/7 dni, poprawka HLN, „nierozstrzygnięte”, najmniejszy wykrywalny efekt, monitor i reguła emerytury H7/H10, H14; blok odporności portfela; dziennik wszystkich metod).
+- Oct 30, 2026: items 1 to 3 implemented (volatility regime-dependent bands for 7/30/90 days, "Calm or stormy?", touches based on daily highs and lows).
+- Oct 30, 2026: items 7 to 9 implemented (Binance leverage and hypotheses H15 to H17, Polymarket and Kalshi benchmark, Deribit options history since 2018 for H13). Benchmark result: the prediction market predicts touches better than our model (Brier score of 0.131 vs 0.160 over the past 2 years).
+- Oct 31, 2026: items 10 to 13 implemented. The HAR-RV/HARQ race on 1/3/7-day bands: none passed (edge <= 0.4%, p > 0.18). Batch 6 (volatility): H18 attention spike and H21 fee share confirmed (weakly, correlation 0.11 and 0.15), H19 exchange flows work in reverse, H20 news tone rejected. The direction track did not pass (Brier score edge -0.07% before, +0.33% after, p-values 0.55 and 0.36), so 50% remains. Taxes: the active portfolio's advantage over dollar-cost averaging since 2018 is 1.13 after taxes and interest (1.12 before).
+- Oct 30, 2026: items 4 to 6 implemented (daily step for 1/3/7 days, HLN correction, "inconclusive" verdict, minimum detectable effect, H7/H10 retirement monitor and rule, H14; portfolio robustness block; log of all methods).
 
-## Plan w kolejności (zysk × szansa, że przejdzie protokół) / nakład
+## Plan in Priority Order (Gain × Chance of Passing Protocol) / Effort
 
-Nakład: 1 = godziny, 3 = dzień–dwa, 5 = tydzień. „Szansa” to ocena sceptyka, że pomysł przejdzie nasz protokół (hipoteza z góry, test poza próbą, egzamin na 2 latach).
+Effort: 1 = hours, 3 = one to two days, 5 = one week. "Chance" is the skeptic's assessment of whether the idea will pass our protocol (pre-registered hypothesis, out-of-sample test, 2-year evaluation).
 
-| # | Co | Zysk | Nakład | Szansa |
+| # | What | Gain | Effort | Chance |
 |---|---|---|---|---|
-| 1 | Pasma zależne od stanu zmienności (wariancja H-dniowa wracająca do normy) + audyt kalibracji po stanach | zakres | 2 | 0,45–0,6 |
-| 2 | „Tydzień spokojny czy burzliwy”, szansa dnia z ruchem ≥5% / ≥10%, szansa obsunięcia | nowy, sprawdzalny produkt | 2 | 0,7 |
-| 3 | Dotknięcie liczone po maksimach i minimach dnia, z poprawką na próbkowanie | uczciwość + ryzyko | 2 | 0,55 |
-| 4 | Statystyka we właściwym rozmiarze: dzienne kroki dla 1–7 dni, poprawka na małe próby, werdykt „nierozstrzygnięte”, minimalny wykrywalny efekt przy każdej bramce | wiarygodność | 2 | 0,8 |
-| 5 | Uczciwość portfela: wszystkie daty startu, przedział ufności, „ślepy” portfel o tej samej ekspozycji, sigma bez zaglądania w przyszłość, tabela kruchości, 1/N obok Hedge | wiarygodność | 2–3 | 0,5–0,75 |
-| 6 | Dziennik na przyszłość: kwantyle każdej metody co dzień, tylko dopisywany, z numerem wersji kodu | wiarygodność | 1 | 0,6 |
-| 7 | Historia dźwigni z Binance (od 2020-09) jako sygnał ryzyka ogona; archiwum stawek za lewar zamiast zablokowanego Bybit | ryzyko | 3 | 0,2–0,3 |
-| 8 | Zewnętrzny sędzia dla dotknięć: rozstrzygnięte rynki Polymarket (od 2024-02) i log Kalshi | wiarygodność | 2–3 | 0,4 |
-| 9 | Historia opcji Deribit (od 2018): asymetria 25-delta, struktura terminowa; H13 rozstrzygalna teraz, nie w 2027 | ryzyko (opcje) | 4 | 0,15 (H13), 0,3 (rozkład z opcji) |
-| 10 | Uczciwe powtórzenie wyścigu zmienności z danych 5-minutowych (HARQ, właściwy sędzia) | zakres (1–7 dni) | 3 | 0,4 |
-| 11 | Wspólna seria testów „regresorów wariancji”: uwaga, odpływy z giełd, ton newsów (GDELT), udział opłat | zakres | 2 | 0,3 |
-| 12 | Osobny tor dla kierunku: prawdopodobieństwo wzrostu liczone wprost i rozliczane wynikiem Briera | kierunek | 2–3 | 0,15 |
-| 13 | Podatek (19%, rozliczenie roczne) i odsetki od gotówki w portfelu, wersja minimalna | wiarygodność portfela | 2 | 0,45 |
+| 1 | Volatility regime-dependent bands (H-day mean-reverting variance) + calibration audit across regimes | range | 2 | 0.45 to 0.6 |
+| 2 | "Calm or stormy week", probability of a day with a move >= 5% / >= 10%, drawdown probability | new, testable product | 2 | 0.7 |
+| 3 | Touch calculated using daily highs and lows, with sampling correction | honesty + risk | 2 | 0.55 |
+| 4 | Appropriately sized statistics: daily steps for 1 to 7 days, small-sample correction, "inconclusive" verdict, minimum detectable effect at every gate | reliability | 2 | 0.8 |
+| 5 | Portfolio honesty: all start dates, confidence interval, "blind" portfolio with identical exposure, sigma without lookahead bias, fragility table, 1/N alongside Hedge | reliability | 2 to 3 | 0.5 to 0.75 |
+| 6 | Future logging: quantiles of every method daily, append-only, with code version commit hash | reliability | 1 | 0.6 |
+| 7 | Leverage history from Binance (since 2020-09) as a tail-risk signal; archive of funding rates instead of cloud-blocked Bybit | risk | 3 | 0.2 to 0.3 |
+| 8 | External benchmark for touches: resolved Polymarket prediction markets (since 2024-02) and Kalshi log | reliability | 2 to 3 | 0.4 |
+| 9 | Deribit options history (since 2018): 25-delta skew, term structure; H13 testable now, not in 2027 | risk (options) | 4 | 0.15 (H13), 0.3 (options-implied distribution) |
+| 10 | Honest rerun of the volatility race using 5-minute data (HARQ, proper benchmark) | range (1 to 7 days) | 3 | 0.4 |
+| 11 | Joint test batch of "variance regressors": attention, exchange outflows, news sentiment (GDELT), fee share | range | 2 | 0.3 |
+| 12 | Separate track for direction: probability of an increase calculated directly and scored with Brier score | direction | 2 to 3 | 0.15 |
+| 13 | Taxes (19%, annual settlement) and interest on cash in portfolio, minimal version | portfolio reliability | 2 | 0.45 |
 
-### 1. Pasma zależne od stanu zmienności
+### 1. Volatility Regime-Dependent Bands
 
-Dziś pasmo na H dni to zmienność dzienna × √H. Gdy jest spokojnie, zmienność zwykle wraca do normy, więc pasmo na 90–180 dni jest za wąskie; gdy jest burzliwie, za szerokie. Moje liczby (od 2015, pokrycie pasmem 80% w tercylu spokojnym / średnim / burzliwym): 30 dni: 67% / 77% / 86%; 90 dni: 52% / 74% / 85%; 180 dni: 48% / 73% / 82%. Wariancja H-dniowa wracająca do normy (parametr powrotu z naszego GJR-GARCH, okres połowiczny 23 dni) wyrównuje rozrzut do 1,21 / 1,25 / 1,26 na 180 dni.
+Today, the H-day band is simply daily volatility × √H. During calm periods, volatility typically reverts to the mean, so the 90 to 180-day band is too narrow; during turbulent periods, it is too wide. My figures (since 2015, 80% band coverage in the calm / medium / stormy tertile): 30 days: 67% / 77% / 86%; 90 days: 52% / 74% / 85%; 180 days: 48% / 73% / 82%. H-day mean-reverting variance (mean-reversion parameter from our GJR-GARCH, half-life of 23 days) evens out the spread to 1.21 / 1.25 / 1.26 over 180 days.
 
-Zastrzeżenia sceptyka, które uwzględnimy: poziom „normy” liczyć z okna kroczącego 2–3 lat (zmienność bitcoina maleje od dekady; w okresie egzaminu 2024–26 efekt jest już mały), horyzonty główne to 7 i 30 dni, 90 i 180 tylko opisowo; wdrożyć albo tę metodę, albo mnożniki pasma zależne od stanu (nie obie naraz, bo się dublują). Najpierw sam audyt: tabela „gdzie pasma zawodzą” (po stanie zmienności, stanie HMM, roku), bo to diagnostyka bez ryzyka.
+Skeptic's caveats that we will take into account: calculate the "baseline" level from a rolling 2 to 3-year window (Bitcoin's volatility has been declining for a decade; during the 2024 to 2026 evaluation period the effect is already small); primary horizons are 7 and 30 days, while 90 and 180 days are descriptive only; implement either this method or regime-dependent band multipliers (not both, as they overlap). First, conduct an audit: a "where the bands fail" table (by volatility regime, HMM regime, year), as this is risk-free diagnostics.
 
-Test z góry: „standaryzacja wariancją wracającą do normy obniża stratę pinball rozkładu bazowego na 7 i 30 dni (DM, HAC) i sprowadza pokrycie 80% do ±5 pkt proc. w każdym tercylu, w teście „jak na żywo” i w egzaminie”.
+Pre-registered test: "standardization using mean-reverting variance reduces the pinball loss of the baseline distribution at 7 and 30 days (DM, HAC) and brings 80% coverage to within ±5 percentage points in each tertile, both in the pseudo-live test and in the out-of-sample evaluation".
 
-### 2. Tydzień spokojny czy burzliwy
+### 2. Calm or Stormy Week
 
-Publikujemy obok uczciwego 50/50: (a) szansę, że zmienność w następnym tygodniu będzie powyżej mediany z roku; (b) szansę co najmniej jednego dnia z ruchem ≥5% i ≥10% w 7 i 30 dni (z już liczonych ścieżek); (c) szansę obsunięcia o 10/20% w 30 dni. Replikacje: korelacja 0,50; wynik Briera lepszy o 6,5% od klimatologii i o 3,6–5,1% od „będzie jak w zeszłym tygodniu”, także w egzaminie. Punktem odniesienia na panelu będzie ta trudniejsza wersja (persistencja).
+We publish alongside the honest 50/50: (a) the probability that volatility next week will be above the 1-year median; (b) the probability of at least one day with a move of >= 5% and >= 10% within 7 and 30 days (derived from already simulated paths); (c) the probability of a 10% or 20% drawdown in 30 days. Replications: 0.50 correlation; Brier score better by 6.5% compared to climatology and by 3.6% to 5.1% compared to "it will be like last week" (persistence), including in the evaluation period. The benchmark on the dashboard will be this tougher version (persistence).
 
-### 3. Dotknięcie po maksimach i minimach
+### 3. Touch Based on Daily Highs and Lows
 
-Panel pyta „czy choć raz dotknie poziomu po drodze”, a liczymy po zamknięciach dnia. Różnica: +10% w 30 dni zdarza się w 57,9% okien po maksimach dnia, a w 50,7% po zamknięciach; −10% w 7 dni: 18,6% wobec 11,7%. Poprawka: losować wspólnie trójki (zamknięcie, maksimum, minimum) lub użyć mostu Browna (Broadie–Glasserman–Kou 1997), z zabezpieczeniem przed pojedynczymi „knotami” jednej giełdy (sprawdzanie z 5-minutowymi danymi Binance). Jeśli nowy model nie utrzyma skuteczności w egzaminie, zostajemy przy zamknięciach i przeredagowujemy panel.
+The dashboard asks "will it touch the level at least once along the way", but we calculate it using daily closes. The difference: +10% in 30 days happens in 57.9% of windows based on daily highs, compared to 50.7% based on closes; -10% in 7 days: 18.6% versus 11.7%. The fix: jointly sample triplets (close, high, low) or use a Brownian bridge (Broadie, Glasserman, Kou 1997), with protection against single-exchange wick anomalies (cross-checking with 5-minute Binance data). If the new model does not maintain its predictive accuracy in the evaluation period, we stay with daily closes and reword the dashboard.
 
-### 4. Statystyka we właściwym rozmiarze
+### 4. Right-Sized Statistics
 
-Testy na 1 i 3 dni używają 579 z około 4050 dostępnych dni (krok tygodniowy dla wszystkich horyzontów). Egzamin na 90 i 180 dni opiera się na 91/79 tygodniowych punktach, czyli około 7 i 3 niezależnych obserwacjach, a wyświetla „nie zdany” jak pewnik. Zmiany: krok dzienny dla 1/3/7 dni (dopasowanie co tydzień, ocena co dzień, błędy HAC z opóźnieniem H+1), poprawka Harveya–Leybourne’a–Newbolda dla małych prób, werdykt „nierozstrzygnięte” gdy efektywna liczba obserwacji < 20, i przy każdej bramce zdanie „najmniejszy efekt, jaki ten test mógłby wykryć”, z jasną zasadą: test za słaby, by wykryć, nadal znaczy „nie używamy”. Do tego datowana reguła emerytury dla H7/H10 (zanik efektu w dwóch kolejnych rocznych sprawdzeniach).
+Tests for 1 and 3 days use 579 out of about 4,050 available days (weekly stepping for all horizons). The evaluation for 90 and 180 days is based on 91/79 weekly points, which amounts to roughly 7 and 3 independent observations, yet it displays "failed" as a certainty. Changes: daily step for 1/3/7 days (refit weekly, evaluate daily, HAC standard errors with lag H+1), Harvey-Leybourne-Newbold correction for small samples, an "inconclusive" verdict when the effective sample size is under 20, and at every gate the sentence "the smallest effect this test could detect", with a clear rule: a test too weak to detect an effect still means "we do not use it". In addition, a dated retirement rule for H7/H10 (decay of the effect across two consecutive annual reviews).
 
-### 5. Uczciwość portfela
+### 5. Portfolio Honesty
 
-Blok odporności w `sim.py` i na panelu: wyniki dla każdej daty startu od 2014 (okna 2 i 4 lata), przedział ufności z bootstrapu blokowego, sigma liczona tylko z przeszłości (dziś parametry zmienności są dopasowane na całej historii, także na okresie egzaminu), tabela kruchości okna trendu, 1/N obok Hedge (są praktycznie równe: 1,15 vs 1,14), monitor zaniku H7 i prerejestracja H14 = kontynuacja H7 na danych po 29.10.2026. Najważniejsze: porównanie ze „ślepym” portfelem o tej samej średniej ekspozycji w BTC, bo to on jest uczciwym punktem odniesienia dla obsunięć. Panel będzie mówił wprost: aktywny portfel to mniejsza ekspozycja w złych okresach, nie wyższy majątek.
+Robustness block in `sim.py` and on the dashboard: performance across every start date since 2014 (2 and 4-year windows), confidence intervals from block bootstrapping, sigma computed strictly out of sample (currently volatility parameters are fit on the full history, including the evaluation period), a fragility table for the trend window, 1/N alongside Hedge (they are virtually identical: 1.15 vs 1.14), a monitor for H7 decay, and pre-registration of H14 = continuation of H7 on data after Oct 29, 2026. Most importantly: comparison against a "blind" portfolio with the same average BTC exposure, as that is the honest benchmark for drawdowns. The dashboard will state plainly: the active portfolio means lower exposure during bad times, not greater wealth.
 
-### 6. Dziennik na przyszłość
+### 6. Future Journal Logging
 
-Co dzień dopisujemy kwantyle każdej metody (nie tylko opublikowane), z numerem commitu z GitHub Actions; nic nie nadpisujemy. Każdy dzień bez tego to bezpowrotnie stracony dowód. Regułę wejścia metody do prognozy ustalić z poprawnym progiem (sceptyk pokazał, że przedział 6–14% na ogony przy 52 wierszach odrzucałby poprawny model w 63% przypadków).
+Every day, we append the quantiles of every method (not just the published ones), with the commit hash from GitHub Actions; nothing is overwritten. Every day without this is evidence lost forever. Establish the admission rule for a method to enter the forecast with a proper threshold (the skeptic showed that a 6% to 14% interval for tails with 52 rows would reject a valid model 63% of the time).
 
-### 7. Historia dźwigni z Binance
+### 7. Leverage History from Binance
 
-Archiwum `data.binance.vision` (sprawdzone): otwarte pozycje, stosunek długich do krótkich u największych traderów i u ogółu, przewaga kupujących nad sprzedającymi, co 5 minut od 1.09.2020 (około 2200 małych plików; trzymamy tylko dzienne agregaty); premia kontraktów wieczystych od 1.01.2020; stawki za lewar od 1.01.2020 (zastąpią zablokowany w chmurze Bybit i 36-dniowy OKX). Historii likwidacji nie ma.
+The `data.binance.vision` archive (verified): open interest, top trader and global long/short ratios, buyer vs seller volume ratio, every 5 minutes since Sep 1, 2020 (around 2,200 small files; we keep only daily aggregates); perpetual contract premium since Jan 1, 2020; funding rates since Jan 1, 2020 (replacing Bybit, which is blocked in cloud environments, and OKX with only 36 days of history). There is no historical liquidation data.
 
-Hipoteza z góry (ryzyko, nie kierunek): „otwarte pozycje / podaż BTC w górnym decylu (znane od D+2) → częstsze dotknięcie −10% w 30 dni i więcej wypadnięć poniżej P10 pasma” (jednostronnie, bootstrap blokowy, nie test dwumianowy, bo epizody są skupione). Ryzyko: udział Binance w rynku maleje, a od 2024 część wysokich pozycji to zabezpieczony arbitraż ETF, więc „dużo pozycji” znaczy dziś co innego niż w 2021. Kaskady likwidacji z 5-minutowych spadków pozycji tylko jako etykieta zdarzeń (dane praktyków pokazują raczej kontynuację spadku niż odbicie). Carry/baza (CME z Yahoo + premia Binance) później, też jako test ryzyka ogona; Deribit sprzed 2021 to tylko kwartalne, cienkie kontrakty.
+Pre-registered hypothesis (risk, not direction): "open interest / BTC supply in the top decile (known at D+2) -> more frequent touches of -10% within 30 days and more breaches below the P10 band" (one-sided, block bootstrap, not a binomial test because episodes cluster). Risks: Binance market share is shrinking, and since 2024 a portion of large positions represents hedged ETF basis arbitrage, so "high open interest" means something different today than in 2021. Liquidation cascades from 5-minute drops in open interest used only as event labels (practitioner data points toward price continuation rather than a bounce). Basis/carry (CME via Yahoo + Binance premium) later, also as a tail-risk test; Deribit before 2021 consisted only of thin quarterly futures.
 
-### 8. Zewnętrzny sędzia dla dotknięć
+### 8. External Benchmark for Touches
 
-Polymarket ma od lutego 2024 rozstrzygnięte miesięczne rynki „czy BTC dotknie X” z dzienną historią cen (rozliczane po 1-minutowych świecach Coinbase). To jedyny natychmiastowy, niezależny sprawdzian jedynego modelu, który ma skuteczność. Z tego komputera adres nie rozwiązuje się w DNS (filtr lokalny), z serwera GitHuba prawdopodobnie zadziała; trzeba to sprawdzić. Przy około 33 miesiącach to raport uczciwości („rynek mówi 19%, my 23%”), nie test zaliczony/niezaliczony. Kalshi (31 rozstrzygniętych rynków miesięcznych od sierpnia 2026, bez klucza) logować co 6 godzin i pokazywać obok własnej liczby, z zastrzeżeniem o spreadzie.
+Polymarket has resolved monthly "will BTC touch X" markets since February 2024 with daily price histories (settled on Coinbase 1-minute candles). This is the only immediate, independent check for the only model that has demonstrated edge. From this local machine the address does not resolve in DNS (local filtering), but from GitHub's servers it will likely work; this needs verification. With around 33 contract-months, this serves as an honesty report ("the market says 19%, we say 23%") rather than a strict pass/fail test. Kalshi (31 resolved monthly markets since August 2026, no API key required) should be logged every 6 hours and displayed alongside our own figure, with a disclaimer regarding the bid-ask spread.
 
-### 9. Historia opcji Deribit
+### 9. Deribit Options History
 
-Archiwum transakcji opcjami (sprawdzone: od stycznia 2018 ze zmiennością implikowaną przy każdej transakcji, gęste od 2019/2020; 550 wygasłych kontraktów terminowych od 2016). Jednorazowe pobranie to tysiące zapytań, kilka godzin lokalnie. Z tego: dzienna asymetria 25-delta, struktura terminowa, popyt netto. Dzięki temu H13 (już zarejestrowana) rozstrzyga się na około 2400 dniach zamiast czekać do 2027. Uczciwe oczekiwanie: odrzucenie (sceptyk sprawdził, że cytowana praca o bitcoinie bada wpływ popytu na ceny opcji, nie prognozę kursu; doktorat SMU 2026 widzi efekt, który słabnie od 2024). Dopiero potem rozkład z opcji (Breeden–Litzenberger) jako kandydat do pasm i dotknięć na 30 dni, oceniany względem obecnej mieszanki z DVOL, nie względem „bez zmian”.
+Options trade archive (verified: since January 2018 with implied volatility for every trade, dense since 2019/2020; 550 expired futures contracts since 2016). A one-time download requires thousands of requests and several hours locally. From this: daily 25-delta skew, term structure, net demand. This allows H13 (already registered) to be resolved across roughly 2,400 days instead of waiting until 2027. Honest expectation: rejection (the skeptic confirmed that the cited paper on Bitcoin investigates the effect of order flow on option prices, not underlying spot price forecasting; an SMU 2026 PhD dissertation finds an effect that weakens after 2024). Only after that should the option-implied distribution (Breeden-Litzenberger) be tested as a candidate for 30-day bands and touches, evaluated against the current DVOL mixture, not against "no change".
 
-### 10. Wyścig zmienności z danych 5-minutowych, powtórzony uczciwie
+### 10. Volatility Race from 5-Minute Data, Repeated Fairly
 
-Nasz wcześniejszy test oceniał modele na szumnym celu (dzienny r²). Gdy sędzią jest prawdziwa zmienność z 5 minut, HAR-RV wygrywa o 8–9% (QLIKE 0,273 vs 0,296), a mieszanka 30/70 o 9%. Ale pokrycie pasm jednodniowych prawie się nie zmienia (0,840 vs 0,832). Dlatego kryterium przyjęcia to strata pinball gotowych pasm na 1/3/7 dni, a nie QLIKE. Wariant HARQ (z kwartycznością), dopasowania rozszerzane co rok, rok 2017 pominięty.
+Our previous test evaluated models against a noisy target (daily squared return r²). When the benchmark is actual 5-minute realized volatility, HAR-RV wins by 8% to 9% (QLIKE 0.273 vs 0.296), and the 30/70 blend by 9%. However, 1-day band coverage barely changes (0.840 vs 0.832). Therefore, the acceptance criterion must be the pinball loss of the finalized 1/3/7-day bands, not QLIKE. HARQ variant (with realized quarticity), expanding refits annually, with the year 2017 excluded.
 
-### 11. Regresory wariancji, jedna wspólna seria
+### 11. Variance Regressors, One Joint Series
 
-Kandydaci (wszystkie bez klucza): skok uwagi na Wikipedii (mamy), odpływy z giełd i obrót względem rezerw (Coin Metrics `FlowOutExNtv`, nieużywane), ton newsów o bitcoinie z GDELT (sprawdzone: dzienna historia od 2017; endpoint liczby artykułów dziś nie odpowiedział), udział opłat w przychodach górników (mamy kolumny). Każdy jako hipoteza o wariancji, przyjmowany tylko, gdy poprawia QLIKE na odłożonych danych. Oczekiwany zysk mały: uwaga podąża za ruchem ceny, który model zmienności już widzi.
+Candidates (all without API keys): Wikipedia attention spikes (we have this), exchange outflows and turnover relative to reserves (Coin Metrics `FlowOutExNtv`, currently unused), Bitcoin news sentiment from GDELT (verified: daily history since 2017; the article count endpoint failed to respond today), fee share in miner revenues (we have the columns). Each tested as a variance hypothesis, accepted only if it improves QLIKE on out-of-sample data. Expected gain is small: public attention follows price moves that the volatility model already captures.
 
-### 12. Osobny tor dla kierunku
+### 12. A Separate Track for Direction
 
-Prawdopodobieństwo wzrostu liczone wprost (probit z sygnałów, które przeszły test, z kalibracją izotoniczną), oceniane wynikiem Briera względem 0,5 i testem znaku z błędami HAC, codziennie, nie co tydzień. Dopiero po punkcie 4. Uczciwe oczekiwanie: 52–54% trafień, moc testu na odciętych 2 latach około 15%, więc wynik „nierozstrzygnięte” przez lata; na panelu zostaje 50%, ale z dopiskiem, ile wynosi trafność na żywo. Rodzina trendu (stan względem średniej 200-dniowej) jako jedna hipoteza główna, bo to ten sam czynnik co H7.
+Probability of an upward move calculated directly (probit regression on signals that passed screening, with isotonic calibration), evaluated via Brier score against 0.5 and a sign test with HAC standard errors, run daily rather than weekly. Only to be done after item 4. Honest expectation: 52% to 54% hit rate, test power on the 2-year holdout around 15%, meaning an "inconclusive" verdict for years; 50% stays on the dashboard, accompanied by a note showing actual live accuracy. The trend family (position relative to the 200-day moving average) as one unified primary hypothesis, as it is the exact same underlying factor as H7.
 
-### 13. Podatek i odsetki w portfelu
+### 13. Taxes and Interest in the Portfolio
 
-Wersja minimalna, dopiero po punkcie 5: 19% od rocznego dochodu z walut wirtualnych (koszty rozliczane kasowo, nadwyżka przechodzi na następny rok, zgodnie z art. 30b ust. 1a ustawy o PIT; nie FIFO), odsetki od gotówki po stopie NBP (BIS publikuje ją bez klucza) pomniejszone o podatek Belki. Pokazywać obok wyniku przed podatkiem. Wstępny rachunek agenta: przewaga 1,14 nad DCA spada do około 1,10–1,115.
+Minimal version, only after item 5: 19% tax on annual net income from virtual currencies (costs accounted on a cash basis, excess costs carried forward to the next tax year, pursuant to Polish PIT law Art. 30b(1a); not FIFO), cash interest at the NBP base rate (published by BIS without an API key) minus the 19% capital gains tax (Belka tax). Display alongside pre-tax performance. Preliminary calculation by the agent: the 1.14 edge over DCA drops to roughly 1.10 to 1.115.
 
-## Nagrywać od dziś (historii nie ma, więc test będzie możliwy za rok lub dwa)
+## Record Starting Today (No Historical Data Available, so Testing Will Be Possible in One to Two Years)
 
-- Surowe wiersze pełnego „uśmiechu” opcji z Deribit przy każdej aktualizacji (już pobieramy podsumowanie, trzeba tylko zapisywać): ocena za lata.
-- Kalshi: miesięczne rynki „dotknie / nie dotknie” (punkt 8).
-- Podaż krótko- i długoterminowych posiadaczy (BGeometrics, bez klucza, ale tylko 4 lata wstecz, okno się przesuwa i historia przepada; licencja tylko do użytku własnego, więc bez publikowania na panelu bez wyjaśnienia).
-- Premia Strategy do wartości posiadanych bitcoinów (mNAV) z danych, które mamy; noga GBTC nie żyje od stycznia 2024.
-- Daty wejścia w życie i terminy konsultacji przepisów o krypto z Federal Register (bez klucza): nie do prognozy, ale do listy nadchodzących wydarzeń na osi czasu.
+- Raw rows of the full Deribit options volatility smile on every update (we already fetch the summary, we just need to persist it): evaluation will take years.
+- Kalshi: monthly "touch / no touch" markets (item 8).
+- Short-term and long-term holder supply (BGeometrics, no API key required, but only 4 years of history, rolling window causes older data to be lost; personal-use-only license, so no publishing on the dashboard without clarification).
+- Strategy premium to net asset value of held bitcoins (mNAV) from data we already have; the GBTC arbitrage leg has been obsolete since January 2024.
+- Effective dates and public comment deadlines for crypto regulations from the Federal Register (no API key required): not for forecasting, but for the upcoming events timeline.
 
-## Nie warto (sprawdzone lub ocenione, z powodem)
+## Not Worth Doing (Tested or Evaluated, with Reasons)
 
-- Pozycje na kredyt z Bitfinex od 2016: brak dowodów, giełda straciła znaczenie po 2019, więc reguła „ten sam znak w obu połowach historii” jest prawie nie do spełnienia.
-- Rankingi aplikacji (Coinbase w App Store), StockTwits, głosy CoinGecko, gwiazdki GitHub: ta sama rodzina „uwaga i nastrój”, która u nas przegrała; zdarzenie szczytowe raz na cykl, dowód za dekadę.
-- Google Trends sklejane z 90-dniowych okien od 2011: sklejanie mnoży błąd próbkowania; badania mówią, że uwaga podąża za ceną.
-- Przepływy górników, dni-monety zniszczone, fale HODL: lore z wykresów, brak testów poza próbą, 4-letnie okno danych daje 1–3 niezależne obserwacje.
-- Dni publikacji CPI/NFP jako mnożnik zmienności: efekt dla bitcoina mały i zależny od epoki (Fed NY 2023: bitcoin nie reaguje systematycznie na dane makro), wymaga klucza do FRED.
-- Mempool i zatory jako regresor zmienności: od 2023 opłaty napędzają ordinals i runes niezależnie od ceny.
-- Czwarta strategia portfela na implikowanej zmienności (DVOL): sigma już zawiera 30% DVOL; w kryptowalutach efekt dźwigni jest odwrócony (Baur i Dimpfl 2018); 3,6 roku danych nie odróżni jej od obecnej.
-- Momentum zależne od reżimu + meta-labeling: potrzebna różnica korelacji większa niż cały efekt momentum.
-- Przepływ zleceń i likwidacje jako sygnał kierunku: działają w sekundach i minutach; a odbicie po kaskadzie likwidacji dane praktyków wręcz przeczą.
-- Teksty FOMC, zgłoszenia do SEC jako sygnał: brak mocy prognostycznej; Federal Register tylko jako kalendarz.
-- Dziennik rewizji danych on-chain: dziś żaden sygnał na żywo nie zależy od danych z łańcucha; wrócić, gdy jakiś wejdzie (i wtedy logować skrót całej kolumny, bo Coin Metrics przepisuje całą historię po znalezieniu nowych adresów giełd).
+- Bitfinex margin funding positions since 2016: lack of empirical evidence; the exchange lost market relevance after 2019, making the rule "same sign across both halves of the history" nearly impossible to satisfy.
+- App store rankings (Coinbase in the App Store), StockTwits, CoinGecko sentiment votes, GitHub stars: same "attention and sentiment" family that failed in our tests; peak events occur once per cycle, requiring a decade to gather sufficient proof.
+- Google Trends stitched from 90-day windows since 2011: stitching compounds sampling error; academic literature confirms that attention lags price.
+- Miner flows, coin-days destroyed, HODL waves: chart lore with no out-of-sample evidence; a 4-year data window yields only 1 to 3 independent observations.
+- CPI/NFP release days as a volatility multiplier: the effect on Bitcoin is minor and regime-dependent (NY Fed 2023: Bitcoin does not react systematically to macroeconomic announcements); requires a FRED API key.
+- Mempool congestion as a volatility regressor: since 2023, transaction fees have been driven by Ordinals and Runes independently of price action.
+- A fourth portfolio strategy based on implied volatility (DVOL): sigma already incorporates 30% DVOL; in cryptocurrencies, the leverage effect is inverted (Baur and Dimpfl 2018); 3.6 years of data cannot distinguish it from the current setup.
+- Regime-dependent momentum + meta-labeling: requires a correlation difference larger than the entire momentum effect itself.
+- Order flow and liquidations as a directional signal: predictive value decays in seconds and minutes; as for bounces after liquidation cascades, empirical data from practitioners directly contradicts this hypothesis.
+- FOMC statements and SEC filings as signals: no predictive power; Federal Register useful only as a calendar.
+- On-chain data revision log: currently, no live signal depends on on-chain data; revisit if one is adopted (and then log a hash of the entire column, because Coin Metrics rewrites full history whenever new exchange wallet clusters are discovered).
 
-## Największy zakład
+## The Biggest Bet
 
-Punkty 1–3 razem: pasma, które wiedzą, w jakim stanie jest rynek, dotknięcia liczone tak, jak obiecuje panel, i „tydzień spokojny czy burzliwy”. To jedyne obszary, w których dziś trzy niezależne rachunki pokazały ten sam, mierzalny zysk, i wszystkie trzy są tanie.
+Items 1 to 3 combined: bands that adjust to the market regime, touch probabilities calculated the way the dashboard promises, and "calm or stormy week". These are the only areas where three independent calculations showed the same measurable improvement today, and all three are inexpensive to build.
 
-## Kluczowe źródła sprawdzone dziś
+## Key References Checked Today
 
 - Diebold, Hickman, Inoue, Schuermann (1998), Converting 1-day volatility to h-day volatility: scaling by √h is worse than you think, Risk 11.
 - Broadie, Glasserman, Kou (1997), A continuity correction for discrete barrier options, Mathematical Finance 7(4).
 - Christoffersen (1998), Evaluating interval forecasts, International Economic Review 39(4).
 - Harvey, Leybourne, Newbold (1997), Testing the equality of prediction mean squared errors, International Journal of Forecasting 13.
 - Patton (2011), Volatility forecast comparison using imperfect volatility proxies, Journal of Econometrics 160; Bollerslev, Patton, Quaedvlieg (2016), Exploiting the errors, Journal of Econometrics 192.
-- Schmeling, Schrimpf, Todorov (2023), Crypto carry, BIS Working Paper 1087: wysoka premia kontraktów zapowiada krachy, nie niższą średnią stopę.
-- Cederburg, O’Doherty, Wang, Yan (2020), On the performance of volatility-managed portfolios, JFE 138: w czasie rzeczywistym zarządzanie zmiennością przegrywa w 72 ze 103 strategii.
+- Schmeling, Schrimpf, Todorov (2023), Crypto carry, BIS Working Paper 1087: high futures basis predicts crashes, not lower average returns.
+- Cederburg, O'Doherty, Wang, Yan (2020), On the performance of volatility-managed portfolios, JFE 138: in real time, volatility management underperforms in 72 out of 103 strategies.
 - Baur, Dimpfl (2018), Asymmetric volatility in cryptocurrencies, Economics Letters 173.
 - Benigno, Rosa (2023), The Bitcoin-Macro Disconnect, NY Fed Staff Report 1052.
 - Page, Clemen (2013), Do prediction markets produce well-calibrated probability forecasts?, Economic Journal 123.
 - Hoang, Baur (2020), Forecasting bitcoin volatility: evidence from the options market, Journal of Futures Markets.
-- Źródła danych sprawdzone pobraniem: data.binance.vision (metrics od 2020-09-01, premiumIndexKlines i fundingRate od 2020-01), history.deribit.com (transakcje opcjami od 2018-01, 550 wygasłych kontraktów), api.elections.kalshi.com (KXBTCMAXMON/MINMON), api.gdeltproject.org (timelinetone od 2017), api.bitcoin-data.com (okno 4 lat), api.blockchain.info (mempool od 2016-06), publicreporting.cftc.gov.
+- Data sources verified via live download: data.binance.vision (metrics since 2020-09-01, premiumIndexKlines and fundingRate since 2020-01), history.deribit.com (options trades since 2018-01, 550 expired contracts), api.elections.kalshi.com (KXBTCMAXMON/MINMON), api.gdeltproject.org (timelinetone since 2017), api.bitcoin-data.com (4-year window), api.blockchain.info (mempool since 2016-06), publicreporting.cftc.gov.

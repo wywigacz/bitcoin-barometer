@@ -1,8 +1,8 @@
-name: Aktualizacja prognoz
+name: Update forecasts
 
 on:
   schedule:
-    - cron: "17 */6 * * *"      # co 6 godzin
+    - cron: "17 */6 * * *"      # every 6 hours
   workflow_dispatch:
 
 permissions:
@@ -24,13 +24,13 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python run.py
-      - name: Zapisz zmiany
+      - name: Save changes
         run: |
           git config user.name "btc-predictor-bot"
           git config user.email "actions@users.noreply.github.com"
           git add -A data docs output
-          if git diff --cached --quiet; then echo "brak zmian"; else
-            git commit -m "Aktualizacja danych i prognoz $(date -u +'%Y-%m-%d %H:%M') UTC"
+          if git diff --cached --quiet; then echo "no changes"; else
+            git commit -m "Update data and forecasts $(date -u +'%Y-%m-%d %H:%M') UTC"
             git pull --rebase -X theirs origin main
             git push
           fi

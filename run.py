@@ -1,9 +1,9 @@
-"""BTC predictor: aktualizacja danych -> analiza -> prognozy -> dashboard.
+"""BTC predictor: update data -> analysis -> forecasts -> dashboard.
 
-  python run.py                    aktualizacja przyrostowa (domyślnie)
-  python run.py --full             pełne pobranie historii od zera
-  python run.py --install-schedule zadanie Harmonogramu Windows (co 6 godzin)
-  python run.py --remove-schedule  usuń zadanie
+  python run.py                    incremental update (default)
+  python run.py --full             download the full history from scratch
+  python run.py --install-schedule Windows Task Scheduler job (every 6 hours)
+  python run.py --remove-schedule  remove the job
 """
 import argparse
 import json
@@ -46,32 +46,32 @@ TASK = "BTC-Predictor"
 def update(full=False):
     old = store.load_daily()
     since = None if (full or old.empty) else old.index.max() - pd.Timedelta(days=30)
-    print("Pobieranie danych" + (" (pełna historia)" if since is None else f" od {since:%Y-%m-%d}") + " ...")
+    print("Downloading data" + (" (full history)" if since is None else f" from {since:%Y-%m-%d}") + " ...")
     fetched, status = sources.fetch_all(since)
     for name, st, info in status:
         print(f"  [{st:5}] {name}: {info}")
     if "close" not in fetched:
-        sys.exit("Brak ceny BTC - przerywam (dane nie zostały zmienione).")
+        sys.exit("No BTC price - stopping (the data was not changed).")
     raw = store.merge_save(old, fetched)
     df = model.build_frame(raw)
 
-    res = model.analyze(df)                      # sygnały, wskaźnik złożony, reżim
+    res = model.analyze(df)                      # signals, composite indicator, regime
     fr = res["frame"]
-    print("Zdarzenia i atrybucja ruchów ...")
+    print("Events and attribution of moves ...")
     E = events.analyze_events(df)
-    print("Dziennik świata (Wikipedia) i nagłówki o Bitcoinie (GDELT) ...")
+    print("World log (Wikipedia) and Bitcoin headlines (GDELT) ...")
     try:
         last = df.index[-1] - pd.Timedelta(days=1)
         worldlog.update(last, budget_s=3600 if full else 300)
         worldlog.save_daily(pd.date_range(worldlog.START, last))
     except Exception as e:
-        print("  [uwaga] dziennik świata:", str(e)[:120])
+        print("  [warning] world log:", str(e)[:120])
     try:
-        if not os.environ.get("BTC_SKIP_NEWS"):                 # pozwala pominąć, gdy nagłówki pobiera inny proces
+        if not os.environ.get("BTC_SKIP_NEWS"):                 # lets us skip this when another process downloads the headlines
             news.update_news(df, budget_s=1800 if full else 120)
     except Exception as e:
-        print("  [uwaga] nagłówki GDELT:", str(e)[:120])
-    print("Akcje i obligacje (S&P 500 + fundusze) ...")
+        print("  [warning] GDELT headlines:", str(e)[:120])
+    print("Stocks and bonds (S&P 500 + funds) ...")
     MKT = None
     try:
         px, sp = markets.update()
@@ -79,35 +79,35 @@ def update(full=False):
         mf.to_csv(markets.FEAT, float_format="%.6g")
         MKT = {"comove": markets.comove(df, px, sp), "analogs": markets.corr_analogs(df, px), "feat": mf}
     except Exception as e:
-        print("  [uwaga] rynki:", str(e)[:150])
-    print("Płynność dolara, pozycje CFTC, DeFi, Lightning, Hacker News, pogoda kosmiczna ...")
+        print("  [warning] markets:", str(e)[:150])
+    print("Dollar liquidity, CFTC positions, DeFi, Lightning, Hacker News, space weather ...")
     try:
         xt.update()
     except Exception as e:
-        print("  [uwaga] dodatkowe sygnały:", str(e)[:120])
-    print("Zmienność z danych 5-minutowych (Binance) ...")
+        print("  [warning] extra signals:", str(e)[:120])
+    print("Volatility from 5-minute data (Binance) ...")
     try:
         rv.update()
     except Exception as e:
-        print("  [uwaga] dane 5-minutowe:", str(e)[:120])
-    print("Historia opcji Deribit i dźwignia Binance ...")
-    for nm, fn in (("historia opcji", lambda: opthist.update(max_days=30)), ("dźwignia", lev.update)):
+        print("  [warning] 5-minute data:", str(e)[:120])
+    print("Deribit options history and Binance leverage ...")
+    for nm, fn in (("options history", lambda: opthist.update(max_days=30)), ("leverage", lev.update)):
         try:
             fn()
         except Exception as e:
-            print(f"  [uwaga] {nm}:", str(e)[:120])
-    print("Duzi gracze: fundusze ETF, Strategy, traderzy Hyperliquid ...")
+            print(f"  [warning] {nm}:", str(e)[:120])
+    print("Big players: ETF funds, Strategy, Hyperliquid traders ...")
     try:
         whales.update()
     except Exception as e:
-        print("  [uwaga] duzi gracze:", str(e)[:120])
-    print("Dane ze świata (rynki, uwaga, pogoda, Słońce) ...")
+        print("  [warning] big players:", str(e)[:120])
+    print("World data (markets, attention, weather, the Sun) ...")
     try:
         raw_w, fails = world.update_world(full=full or not world.WORLD_CSV.exists())
         if fails:
-            print("  [uwaga] brak szeregów:", ", ".join(fails))
+            print("  [warning] missing series:", ", ".join(fails))
     except Exception as e:
-        print("  [uwaga] świat:", str(e)[:120])
+        print("  [warning] world:", str(e)[:120])
         raw_w = pd.read_csv(world.WORLD_CSV, index_col=0, parse_dates=True) if world.WORLD_CSV.exists() else None
     if raw_w is not None and len(raw_w):
         extra = pd.DataFrame(index=df.index)
@@ -124,73 +124,73 @@ def update(full=False):
         if "y_c_eth" in cols:
             extra["d_ethbtc"] = raw_w["y_c_eth"].reindex(df.index) / df["close"]
             alts = [c for c in ("y_c_xrp", "y_c_ltc", "y_c_bch", "y_c_xmr", "y_c_ada", "y_c_trx", "y_c_link", "y_c_doge") if c in cols]
-            if alts:                                     # stały koszyk notowany od 2017, liczony tylko gdy są wszystkie (bez skoków przy debiutach)
+            if alts:                                     # fixed basket listed since 2017, computed only when all are present (no jumps at new listings)
                 A = raw_w[alts].reindex(df.index).dropna()
                 extra["d_altbtc"] = np.exp(np.log(A).mean(axis=1)) / df["close"].reindex(A.index)
         raw_x = raw_w.loc["2011-08-01":].join(extra, how="outer")
         T = world.transforms(raw_x, df.index)
     else:
         T = None
-    print("Regularność układu i skaner zależności ...")
+    print("System regularity and relationship scanner ...")
     Rg = regularity.run(df)
     S = scan.run_scan(df, T) if T is not None else None
-    print("Test potwierdzający (duzi gracze, hipotezy spisane z góry) ...")
+    print("Confirmation test (big players, hypotheses written down in advance) ...")
     CF = None
     try:
         CF = confirm.run(df)
         print("  " + ", ".join(f'{r["id"]}: {r["status"]}' for r in CF["rows"]))
     except Exception as e:
-        print("  [uwaga] test potwierdzający:", str(e)[:120])
+        print("  [warning] confirmation test:", str(e)[:120])
     DT = None
-    try:                                                         # osobny tor kierunku (szansa wzrostu w 7 dni, wynik Briera)
+    try:                                                         # separate direction track (chance of a rise in 7 days, Brier score)
         DT = dirtrack.run(df, CF)
         if DT:
-            print(f'  tor kierunku: {"zdał" if DT["passed"] else "nie zdał"}, dziś {DT["p_now"] * 100:.0f}% szans na wzrost w 7 dni')
+            print(f'  direction track: {"passed" if DT["passed"] else "did not pass"}, today a {DT["p_now"] * 100:.0f}% chance of a rise in 7 days')
     except Exception as e:
-        print("  [uwaga] tor kierunku:", str(e)[:120])
+        print("  [warning] direction track:", str(e)[:120])
     conf = None
-    if CF and CF["confirmed"]:                                   # tylko potwierdzone sygnały trafiają do osobnej metody w zespole
+    if CF and CF["confirmed"]:                                   # only confirmed signals go into a separate method in the ensemble
         conf = pd.concat([confirm._z(CF["features"][c]) for c in CF["confirmed"]], axis=1).mean(axis=1)
-    print("Zespół modeli (walk-forward) ...")
-    SHORT = [1, 3]                                               # krótkie horyzonty: tylko test, czy da się pokonać rzut monetą
+    print("Model ensemble (walk-forward) ...")
+    SHORT = [1, 3]                                               # short horizons: only a test of whether we can beat a coin toss
     ens = ensemble.run(df, E["events"], fr["features"], fr["scores"], fr["composite"], Rg, T, conf, SHORT + C.HORIZONS)
     ens["short"] = {h: ens["horizons"].pop(h) for h in SHORT}
     ens["forecasts"] = [f for f in ens["forecasts"] if f["horizon"] not in SHORT]
-    print("Szanse dotknięcia poziomów ceny ...")
+    print("Chances of touching price levels ...")
     TCH, SIM = None, None
     sig_now = ensemble.vol_models(df)[0]
     try:
         TCH = touch.run(df, sig_now)
     except Exception as e:
-        print("  [uwaga] szanse dotknięcia:", str(e)[:120])
-    print("Sędzia: rynki zakładów (Polymarket, Kalshi) ...")
+        print("  [warning] touch chances:", str(e)[:120])
+    print("Judge: betting markets (Polymarket, Kalshi) ...")
     JD = None
     try:
         JD = judge.run(df, sig_now, (TCH or {}).get("best", "drift"), df.index[-1])
     except Exception as e:
-        print("  [uwaga] sędzia:", str(e)[:120])
-    print("Spokojnie czy burzliwie (zdarzenia zmienności) ...")
+        print("  [warning] judge:", str(e)[:120])
+    print("Calm or stormy (volatility events) ...")
     VE = None
     try:
         VE = volev.run(df, sig_now)
-        print("  " + ", ".join(f'{k}: {v["p_now"] * 100:.0f}%{" (potwierdzone)" if v["confirmed"] else ""}' for k, v in VE.items() if v.get("p_now") is not None))
+        print("  " + ", ".join(f'{k}: {v["p_now"] * 100:.0f}%{" (confirmed)" if v["confirmed"] else ""}' for k, v in VE.items() if v.get("p_now") is not None))
     except Exception as e:
-        print("  [uwaga] zdarzenia zmienności:", str(e)[:120])
-    print("Wirtualny portfel (decyzja dnia i test na historii) ...")
+        print("  [warning] volatility events:", str(e)[:120])
+    print("Virtual portfolio (today's decision and a test on history) ...")
     try:
         SIM = sim.run(df, sig_now)
         if SIM.get("live"):
-            print(f"  portfel: {SIM['live']['value']:,.0f} zł przy wpłatach {SIM['live']['deposited']:,.0f} zł, w BTC {SIM['live']['w'] * 100:.0f}%")
+            print(f"  portfolio: {SIM['live']['value']:,.0f} PLN on deposits of {SIM['live']['deposited']:,.0f} PLN, {SIM['live']['w'] * 100:.0f}% in BTC")
     except Exception as e:
-        print("  [uwaga] wirtualny portfel:", str(e)[:120])
+        print("  [warning] virtual portfolio:", str(e)[:120])
     TR = None
-    try:                                                         # wirtualny trader: decyzja przy każdej aktualizacji w chmurze
+    try:                                                         # virtual trader: a decision at every cloud update
         TR = trader.run(df, sig_now, VE)
         if TR.get("log"):
             r0 = TR["log"][0]
-            print(f'  trader: {r0["local"]} {r0["action"]} {r0["amount_pln"]:,.0f} zł, portfel {TR["value"]:,.0f} zł' + ("" if TR["wrote"] else " (bez nowej decyzji)"))
+            print(f'  trader: {r0["local"]} {r0["action"]} {r0["amount_pln"]:,.0f} PLN, portfolio {TR["value"]:,.0f} PLN' + ("" if TR["wrote"] else " (no new decision)"))
     except Exception as e:
-        print("  [uwaga] trader:", str(e)[:120])
+        print("  [warning] trader:", str(e)[:120])
     res["forecasts"] = ens["forecasts"]
     for f in res["forecasts"]:
         f["pred_z"] = 0.0
@@ -198,10 +198,10 @@ def update(full=False):
     res["quality"] = {h: {"active": v["alpha"] > 0, "n": v["n"]} for h, v in ens["horizons"].items()}
     log = store.update_log(res, df)
     stats = store.log_stats(log)
-    try:                                                         # dziennik na przyszłość: każda metoda, tylko dopisywany
+    try:                                                         # ledger for the future: every method, append-only
         ens["ledger"] = store.ledger_stats(store.update_ledger(res["asof"], res["price"], ens, df["close"]))
     except Exception as e:
-        print("  [uwaga] dziennik metod:", str(e)[:120])
+        print("  [warning] method ledger:", str(e)[:120])
 
     C.OUT_DIR.mkdir(exist_ok=True)
     slim = {k: v for k, v in res.items() if k != "frame"}
@@ -232,12 +232,12 @@ def update(full=False):
 
 
 def print_summary(res):
-    print(f"\nBTC {res['price']:,.0f} USD  ({res['asof']})  zmienność dzienna {res['daily_vol']*100:.2f}%")
-    print(f"Wskaźnik złożony: {res['composite']:+.2f}  -> {res['regime']}")
-    print(f"{'Horyzont':>9} {'Data':>11} {'P10':>9} {'Mediana':>9} {'P90':>9} {'P(wzrost)':>10}  model")
+    print(f"\nBTC {res['price']:,.0f} USD  ({res['asof']})  daily volatility {res['daily_vol']*100:.2f}%")
+    print(f"Composite indicator: {res['composite']:+.2f}  -> {res['regime']}")
+    print(f"{'Horizon':>9} {'Date':>11} {'P10':>9} {'Median':>9} {'P90':>9} {'P(rise)':>10}  model")
     for f in res["forecasts"]:
         q = res["quality"][f["horizon"]]
-        tag = "zespół modeli" if q["active"] else "tylko zmienność"
+        tag = "model ensemble" if q["active"] else "volatility only"
         print(f"{f['horizon']:>7} d {f['target']:>11} {f['p10']:>9,.0f} {f['p50']:>9,.0f} {f['p90']:>9,.0f} {f['prob_up']*100:>9.0f}%  {tag}")
     print(f"\nDashboard: {C.DASHBOARD_HTML}")
 
@@ -248,7 +248,7 @@ def schedule(install=True):
                "/TR", f'"{sys.executable}" "{C.ROOT / "run.py"}"']
     else:
         cmd = ["schtasks", "/Delete", "/F", "/TN", TASK]
-    print(subprocess.run(cmd, capture_output=True, text=True).stdout or "gotowe")
+    print(subprocess.run(cmd, capture_output=True, text=True).stdout or "done")
 
 
 if __name__ == "__main__":

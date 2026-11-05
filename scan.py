@@ -1,11 +1,11 @@
-"""Skaner zależności: setki szeregów ze świata vs przyszłe zwroty BTC, z kontrolą wielokrotnych testów.
+"""Relationship scanner: hundreds of world data series vs future BTC returns, with control for multiple testing.
 
-Problem: przy ~1900 testach ok. 5% (czyli ~95) wyjdzie "istotnych" z samego przypadku. Dlatego:
-  1. p-wartości liczone konserwatywnie (efektywna liczba obserwacji = n / horyzont, bo zwroty nakładają się),
-  2. korekta Benjaminiego-Hochberga (FDR, q = 0,10),
-  3. stabilność: ten sam znak w obu połowach próby,
-  4. test poza próbą: wybór na pierwszych 70% historii, ocena na ostatnich 30%.
-Za "odkrycie" uznajemy tylko to, co przejdzie wszystko naraz.
+The problem: with ~1,900 tests, about 5% (so ~95) will come out "significant" by pure chance. That is why:
+  1. p-values are computed conservatively (effective number of observations = n / horizon, because returns overlap),
+  2. Benjamini-Hochberg correction (FDR, q = 0.10),
+  3. stability: the same sign in both halves of the sample,
+  4. out-of-sample test: selection on the first 70% of history, evaluation on the last 30%.
+We only count something as a "discovery" if it passes all of these at once.
 """
 import numpy as np
 import pandas as pd
@@ -50,18 +50,18 @@ def label(col):
     base, _, tr = col.partition("|")
     nm = W.LABELS.get(base, base)
     if tr in ("d7", "dev"):
-        return f"{nm} ({'zmiana 7 dni' if tr == 'd7' else 'odchylenie od średniej rocznej'})"
+        return f"{nm} ({'7-day change' if tr == 'd7' else 'deviation from the yearly average'})"
     if base.startswith("we_"):
-        desc = {"a7": "natężenie 7 dni vs 90 dni", "a30": "natężenie 30 dni vs rok"}.get(tr, tr)
+        desc = {"a7": "intensity 7 days vs 90 days", "a30": "intensity 30 days vs a year"}.get(tr, tr)
     else:
-        desc = {"r1": "zwrot 1d", "r7": "zwrot 7d", "r30": "zwrot 30d", "a7": "uwaga 7d vs 90d", "a30": "uwaga 30d vs rok",
-                "w7": "anomalia 7d", "w30": "anomalia 30d", "s": ""}.get(tr, tr)
+        desc = {"r1": "1d return", "r7": "7d return", "r30": "30d return", "a7": "attention 7d vs 90d", "a30": "attention 30d vs a year",
+                "w7": "7d anomaly", "w30": "30d anomaly", "s": ""}.get(tr, tr)
     return f"{nm} ({desc})" if desc else nm
 
 
 def world_analogs(df, top=8, gap=60):
-    """Okresy, w których świat (profil wydarzeń z ostatnich 30 dni) był najbardziej podobny do dzisiejszego, i co potem robił BTC.
-    Opis, nie prognoza: to kilka epizodów, a nie niezależne próby."""
+    """Periods when the world (the profile of events over the last 30 days) looked most like today, and what BTC did next.
+    A description, not a forecast: these are a few episodes, not independent trials."""
     import worldlog
     try:
         wl = pd.read_csv(worldlog.DAILY, index_col=0, parse_dates=True)
@@ -80,7 +80,7 @@ def world_analogs(df, top=8, gap=60):
     f90 = (c.shift(-90) / c - 1) * 100
     Z = z.to_numpy()
     d = np.sqrt(((Z - cur) ** 2).mean(axis=1))
-    cand = [(d[i], z.index[i]) for i in range(len(z) - 120)]     # tylko dni z poznanym wynikiem 90 dni
+    cand = [(d[i], z.index[i]) for i in range(len(z) - 120)]     # only days whose 90-day outcome is already known
     cand.sort()
     picked = []
     for dist, day in cand:
@@ -103,7 +103,7 @@ def run_scan(df, T):
         y = (lr.shift(-h) - lr).to_numpy(float)
         for lag in LAGS:
             for col in T.columns:
-                if col.startswith(("s_", "g_")) and (lag != 0 or h != 30):      # ~500 spółek: tylko jeden wariant, żeby nie mnożyć testów
+                if col.startswith(("s_", "g_")) and (lag != 0 or h != 30):      # ~500 companies: only one variant, so we do not multiply the tests
                     continue
                 x = T[col].shift(lag).to_numpy(float)
                 r, m = _corr(x, y)
@@ -125,7 +125,7 @@ def run_scan(df, T):
     R["label"] = R["col"].map(label)
     R["score"] = R["r"].abs() * R["stable"].astype(float) * R["oos"].astype(float)
 
-    # współruch tygodniowy z BTC (opis, nie predykcja): zwroty 7d, próbkowanie co 7 dni
+    # weekly co-movement with BTC (description, not prediction): 7d returns, sampled every 7 days
     co = []
     btc7 = lr.diff(7).to_numpy(float)
     for col in [c for c in T.columns if c.endswith("|r7") and not c.startswith(("m_", "mk_"))]:

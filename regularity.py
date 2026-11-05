@@ -1,5 +1,5 @@
-"""Regularność układu: czy zwroty BTC mają strukturę (pamięć, trend, grupowanie, ogony, cykle), a nie tylko szum.
-Wszystkie miary liczone na oknach kroczących, wyłącznie z przeszłości danego dnia."""
+"""Regularity of the system: do BTC returns have structure (memory, trend, clustering, tails, cycles), or are they just noise?
+All measures are computed on rolling windows, using only the past of each day."""
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -7,7 +7,7 @@ from scipy.optimize import minimize
 
 
 def hurst_dfa(r, scales=(8, 12, 16, 24, 32, 48, 64, 96)):
-    """DFA-1 na zwrotach: alfa ~0,5 = szum, >0,5 = trwałość (trend), <0,5 = powrót do średniej."""
+    """DFA-1 on returns: alpha ~0.5 = noise, >0.5 = persistence (trend), <0.5 = mean reversion."""
     y = np.cumsum(r - r.mean())
     F, S = [], []
     for s in scales:
@@ -28,7 +28,7 @@ def hurst_dfa(r, scales=(8, 12, 16, 24, 32, 48, 64, 96)):
 
 
 def perm_entropy(r, m=4):
-    """Znormalizowana entropia permutacyjna: 1 = czysty szum, niżej = więcej uporządkowanych wzorców."""
+    """Normalized permutation entropy: 1 = pure noise, lower = more ordered patterns."""
     n = len(r) - m + 1
     if n < 50:
         return np.nan
@@ -48,7 +48,7 @@ def _fact(m):
 
 
 def variance_ratio(r, q=5):
-    """Lo-MacKinlay: VR(q) - 1 i statystyka z (odporna na heteroskedastyczność). >0 trend, <0 powrót do średniej."""
+    """Lo-MacKinlay: VR(q) - 1 and a z statistic (robust to heteroskedasticity). >0 trend, <0 mean reversion."""
     n = len(r)
     if n < q * 10:
         return np.nan, np.nan
@@ -75,7 +75,7 @@ def hill(r, frac=0.05):
 
 
 def rolling_metrics(r, window=365, step=7):
-    """Metryki kroczące; wartości między punktami uzupełniane do przodu (bez podglądania)."""
+    """Rolling metrics; values between points are forward-filled (no peeking)."""
     n = len(r)
     cols = ["hurst", "pent", "vr5", "ac1", "acabs", "hill"]
     out = np.full((n, len(cols)), np.nan)
@@ -90,7 +90,7 @@ def rolling_metrics(r, window=365, step=7):
 
 
 def kalman_trend(logp, q_ratio=None):
-    """Lokalny model liniowy (poziom + nachylenie), filtr Kalmana na cenach tygodniowych. Zwraca nachylenie i jego niepewność."""
+    """Local linear model (level + slope), Kalman filter on weekly prices. Returns the slope and its uncertainty."""
     y = np.asarray(logp, float)
 
     def run(par):
@@ -119,7 +119,7 @@ def kalman_trend(logp, q_ratio=None):
 
 
 def markov(r7, state_cut=(-0.33, 0.33)):
-    """Łańcuch Markowa na stanach tygodniowego zwrotu (spadek/neutralnie/wzrost). Test niezależności chi-kwadrat."""
+    """Markov chain on weekly return states (down/neutral/up). Chi-square test of independence."""
     x = r7[np.isfinite(r7)]
     lo, hi = np.quantile(x, [0.33, 0.67])
     s = np.where(x < lo, 0, np.where(x > hi, 2, 1))
@@ -132,7 +132,7 @@ def markov(r7, state_cut=(-0.33, 0.33)):
 
 
 def evt_tail(r, years=4):
-    """Teoria wartości ekstremalnych: GPD dla strat powyżej 95. percentyla z ostatnich lat. Dzienne VaR/ES."""
+    """Extreme value theory: GPD for losses above the 95th percentile over recent years. Daily VaR/ES."""
     x = -r[-365 * years:]
     u = np.quantile(x, 0.95)
     exc = x[x > u] - u
@@ -149,7 +149,7 @@ def evt_tail(r, years=4):
 
 
 def spectrum(r, top=3):
-    """Dominujące okresy w zmienności (periodogram log|r|), pomijając bardzo długie trendy."""
+    """Dominant periods in volatility (periodogram of log|r|), ignoring very long trends."""
     v = np.log(np.abs(r) + 1e-4)
     v = v - pd.Series(v).rolling(365, min_periods=100, center=False).mean().bfill().to_numpy()
     v = v[~np.isnan(v)]

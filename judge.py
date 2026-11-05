@@ -1,12 +1,12 @@
-"""Zewnętrzny sędzia dla szans dotknięcia poziomów: rynki zakładów, na których ludzie stawiają prawdziwe pieniądze.
+"""An outside judge for the chances of touching levels: betting markets, where people put real money down.
 
-Polymarket (wstecz, od 2024): rozstrzygnięte miesięczne rynki „czy BTC dotknie X w danym miesiącu” (rozliczane po 1-minutowych
-świecach Coinbase). Dla każdego rynku bierzemy cenę z pierwszego dnia po otwarciu i liczymy naszą szansę dotknięcia tego samego
-poziomu do końca miesiąca, używając wyłącznie danych sprzed tego dnia. Porównanie wynikiem Briera z tym, co się stało.
-Kalshi (na żywo, od 2026-10-30): przy każdej aktualizacji zapisujemy cenę rynków „czy BTC przekroczy / spadnie poniżej X do końca
-miesiąca” i naszą szansę; po rozstrzygnięciu dopisujemy wynik. Dziennik tylko dopisywany.
-To raport uczciwości, a nie test zaliczony/niezaliczony: rynki w jednym miesiącu dzielą tę samą ścieżkę ceny, więc
-niezależnych obserwacji jest tyle, ile miesięcy."""
+Polymarket (backward-looking, since 2024): settled monthly markets "will BTC touch X this month" (settled on 1-minute
+Coinbase candles). For each market we take the price from the first day after it opened and compute our chance of touching the same
+level by the end of the month, using only data from before that day. We compare with what happened using the Brier score.
+Kalshi (live, since 2026-10-30): at every update we record the price of the markets "will BTC go above / fall below X by the end
+of the month" and our chance; after settlement we add the outcome. The log is append-only.
+This is an honesty report, not a pass/fail test: markets in the same month share the same price path, so
+there are only as many independent observations as there are months."""
 import json
 import re
 import shutil
@@ -28,7 +28,7 @@ HOLDOUT = pd.Timestamp("2024-10-29")
 
 
 def _get(host, path):
-    """Zwykłe zapytanie; jeśli lokalny DNS blokuje adres, rozwiązanie przez DNS Google i curl z --resolve."""
+    """A plain request; if the local DNS blocks the address, resolve it via Google DNS and use curl with --resolve."""
     try:
         r = requests.get(f"https://{host}{path}", headers=UA, timeout=60)
         if r.status_code == 200:
@@ -103,7 +103,7 @@ def poly_update(verbose=True):
                              "end": end.normalize().strftime("%Y-%m-%d"), "p_market": p0, "outcome": float(out[0] == "1")})
                 time.sleep(0.2)
         off += 100
-        if rows:                                                 # zapis po każdej stronie: przerwanie nie gubi pobranego
+        if rows:                                                 # save after every page: an interruption does not lose what was downloaded
             part = pd.DataFrame(rows)
             (pd.concat([old, part], ignore_index=True) if len(old) else part).to_csv(POLY, index=False)
     new = pd.DataFrame(rows)
@@ -111,12 +111,12 @@ def poly_update(verbose=True):
     if len(allm):
         allm.to_csv(POLY, index=False)
     if verbose:
-        print(f"  [OK   ] Polymarket (rozstrzygnięte rynki dotknięcia): {len(new)} nowych, razem {len(allm)}", flush=True)
+        print(f"  [OK   ] Polymarket (settled touch markets): {len(new)} new, {len(allm)} in total", flush=True)
     return allm
 
 
 def _model_probs(df, sig, D, day, H, levels_up, mode, n=4000):
-    """Nasza szansa dotknięcia poziomów w ciągu H dni, liczona tylko z danych do dnia `day` włącznie."""
+    """Our chance of touching the levels within H days, computed only from data up to and including `day`."""
     idx = df.index
     t = int(np.searchsorted(idx, day, side="right")) - 1
     if t < 500:
@@ -142,7 +142,7 @@ def poly_eval(df, sig, mode):
     D = TO._days(df, sig)
     out = []
     for (d0, end), g in M.groupby(["d0", "end"]):
-        day = pd.Timestamp(d0) - pd.Timedelta(days=1)      # cena rynku z początku dnia d0 = nasze dane do zamknięcia dnia d0−1
+        day = pd.Timestamp(d0) - pd.Timedelta(days=1)      # market price at the start of day d0 = our data up to the close of day d0-1
         H = (pd.Timestamp(end) - pd.Timestamp(d0)).days + 1
         pr = _model_probs(df, sig, D, day, H, list(zip(g["strike"], g["up"])), mode)
         if pr is None:
@@ -166,7 +166,7 @@ def poly_eval(df, sig, mode):
 
 
 def kalshi_update(df, sig, mode, asof):
-    """Dziennik na żywo: ceny rynków Kalshi i nasza szansa dla tych samych poziomów; po rozstrzygnięciu wynik."""
+    """Live log: Kalshi market prices and our chance for the same levels; the outcome after settlement."""
     old = pd.read_csv(KLIVE) if KLIVE.exists() else pd.DataFrame()
     rows = []
     D = TO._days(df, sig)
@@ -202,7 +202,7 @@ def kalshi_update(df, sig, mode, asof):
     L = pd.concat([old, new], ignore_index=True) if len(old) else new
     if L.empty:
         return None
-    # wynik po rozstrzygnięciu (dopisujemy tylko wynik, prognoz nie ruszamy)
+    # outcome after settlement (we only add the outcome, we never touch the forecasts)
     pend = L[L["outcome"].isna() & (pd.to_datetime(L["close"]) < pd.Timestamp(asof))]["ticker"].unique()
     for tk in pend[:200]:
         try:
@@ -227,9 +227,9 @@ def run(df, sig, mode, asof):
         poly_update()
         out["poly"] = poly_eval(df, sig, mode)
     except Exception as e:
-        print("  [uwaga] Polymarket:", str(e)[:120])
+        print("  [warning] Polymarket:", str(e)[:120])
     try:
         out["kalshi"] = kalshi_update(df, sig, mode, asof)
     except Exception as e:
-        print("  [uwaga] Kalshi:", str(e)[:120])
+        print("  [warning] Kalshi:", str(e)[:120])
     return out

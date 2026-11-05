@@ -1,11 +1,12 @@
-"""Zdarzenia zmienności, czyli to, co ten system naprawdę potrafi przewidywać:
-  burza7  - czy następny tydzień będzie burzliwy (zmienność 7 dni powyżej swojej mediany z ostatniego roku),
-  dzien5  - czy w ciągu 7 dni zdarzy się dzień z ruchem ceny o co najmniej 5% (w górę lub w dół),
-  dzien10 - czy w ciągu 30 dni zdarzy się dzień z ruchem o co najmniej 10%.
-Model: regresja logistyczna na dzisiejszej prognozie zmienności, dopasowywana co tydzień tylko na zdarzeniach,
-których wynik był już znany. Punkty odniesienia: stała częstość z przeszłości oraz „jak ostatnio” (częstość zdarzenia
-pod warunkiem tego, co działo się w ostatnim okresie). Egzamin: odcięte 2 lata od 2024-10-29.
-Reguła (spisana 2026-10-30, przed wynikami): „przewaga potwierdzona” tylko gdy model bije „jak ostatnio” i przed, i po odcięciu."""
+"""Volatility events, which is what this system can really forecast:
+  burza7  - will the next week be stormy (7-day volatility above its median over the last year),
+  dzien5  - will there be a day with a price move of at least 5% (up or down) within 7 days,
+  dzien10 - will there be a day with a move of at least 10% within 30 days.
+Model: logistic regression on today's volatility forecast, refitted every week only on events
+whose outcome was already known. Benchmarks: the fixed rate from the past, and "like recently" (the rate of the event
+given what happened in the most recent period). Exam: the 2 years held out from 2024-10-29.
+Rule (written down 2026-10-30, before the results): "edge confirmed" only when the model beats "like recently" both before and after the cutoff.
+Keys (burza7, dzien5, dzien10, przed, po, calosc) are internal and stay as they are."""
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -14,26 +15,26 @@ HOLDOUT = pd.Timestamp("2024-10-29")
 START = pd.Timestamp("2015-09-01")
 STEP = 7
 EVENTS = {
-    "burza7": {"H": 7, "label": "Burzliwy tydzień", "q": "Czy następny tydzień będzie burzliwy?"},
-    "dzien5": {"H": 7, "label": "Dzień z ruchem ≥5% w 7 dni", "q": "Czy w ciągu tygodnia zdarzy się dzień z ruchem o 5% lub więcej?"},
-    "dzien10": {"H": 30, "label": "Dzień z ruchem ≥10% w 30 dni", "q": "Czy w ciągu miesiąca zdarzy się dzień z ruchem o 10% lub więcej?"},
+    "burza7": {"H": 7, "label": "Stormy week", "q": "Will next week be stormy?"},
+    "dzien5": {"H": 7, "label": "Day with a ≥5% move in 7 days", "q": "Will there be a day with a move of 5% or more within a week?"},
+    "dzien10": {"H": 30, "label": "Day with a ≥10% move in 30 days", "q": "Will there be a day with a move of 10% or more within a month?"},
 }
 
 
 def _series(df, sig):
     r = np.log(df["close"]).diff()
     r2 = r ** 2
-    rv7 = r2.rolling(7).mean()                                   # zmienność z ostatnich 7 dni (znana w dniu t)
+    rv7 = r2.rolling(7).mean()                                   # volatility over the last 7 days (known on day t)
     med = rv7.rolling(365, min_periods=200).median()
     absr = r.abs()
     S = pd.DataFrame(index=df.index)
     S["sig"] = sig
     S["x_rel"] = np.log(S["sig"] ** 2 / med)
     S["x_abs"] = np.log(S["sig"])
-    # zdarzenia w przyszłości (to, co oceniamy) i ich odpowiedniki z przeszłości (do „jak ostatnio”)
+    # future events (what we score) and their past counterparts (for "like recently")
     S["y_burza7"] = (rv7.shift(-7) > med).astype(float).where(rv7.shift(-7).notna() & med.notna())
     S["p_burza7"] = (rv7 > med).astype(float).where(med.notna())
-    fwd = lambda H: absr[::-1].rolling(H).max()[::-1].shift(-1)            # max |r| w dniach t+1..t+H
+    fwd = lambda H: absr[::-1].rolling(H).max()[::-1].shift(-1)            # max |r| over days t+1..t+H
     S["y_dzien5"] = (fwd(7) >= np.log(1.05)).astype(float).where(fwd(7).notna())
     S["p_dzien5"] = (absr.rolling(7).max() >= np.log(1.05)).astype(float)
     S["y_dzien10"] = (fwd(30) >= np.log(1.10)).astype(float).where(fwd(30).notna())
@@ -71,14 +72,14 @@ def run(df, sig):
         for nm, msk in (("przed", pre), ("po", post), ("calosc", np.ones(len(R), bool))):
             bm, bc, bp = b("mod", msk), b("clim", msk), b("pers", msk)
             res[nm] = {"n": int(msk.sum()), "brier": bm, "skill_clim": 1 - bm / bc, "skill_pers": 1 - bm / bp}
-        # rzetelność: w koszykach przewidywanej szansy (cała historia)
+        # reliability: in buckets of the forecast chance (whole history)
         bins = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
         rel = []
         for lo, hi in zip(bins[:-1], bins[1:]):
             mk = (R["mod"] >= lo) & (R["mod"] < hi)
             if mk.sum() >= 15:
                 rel.append({"lo": lo, "hi": hi, "n": int(mk.sum()), "pred": float(R["mod"][mk].mean()), "real": float(R["y"][mk].mean())})
-        # szansa na dziś: model dopasowany na wszystkich znanych wynikach
+        # today's chance: model fitted on all known outcomes
         t = len(idx) - 1
         known = np.arange(0, t - H + 1)
         known = known[np.isfinite(x[known]) & np.isfinite(y[known])]

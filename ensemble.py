@@ -1,13 +1,14 @@
-"""Zespół modeli rozkładu przyszłego zwrotu BTC z uczciwą oceną walk-forward.
+"""An ensemble of models for the distribution of BTC's future return, with an honest walk-forward evaluation.
 
-Modele (wszystkie prognozują kwantyle standaryzowanego zwrotu z = ln(P[t+H]/P[t]) / (sigma_t * sqrt(H))):
-  naive  - bez zmian: empiryczny rozkład historycznych z, wyśrodkowany na zero (benchmark)
-  comp   - regresja na wskaźniku złożonym + empiryczne reszty
-  ridge  - regresja grzbietowa na ~20 cechach (wskaźniki, momentum, reżimy HMM, power law, zdarzenia, nastroje)
-  knn    - analogi: podobne dni z przeszłości i ich rzeczywiste zwroty
-  gbq    - gradient boosting z funkcją straty kwantylowej
-Zmienność (sigma) to mieszanka EWMA, GJR-GARCH i HAR na estymatorze Parkinsona (wagi z QLIKE).
-Zespół: wagi online z dotychczasowego pinball loss (tylko przeszłość), a na końcu kalibracja pokrycia pasma.
+Models (all forecast quantiles of the standardized return z = ln(P[t+H]/P[t]) / (sigma_t * sqrt(H))):
+  naive  - no change: the empirical distribution of past z, centered on zero (benchmark)
+  comp   - regression on the composite indicator + empirical residuals
+  ridge  - ridge regression on ~20 features (indicators, momentum, HMM regimes, power law, events, sentiment)
+  knn    - analogs: similar days from the past and their actual returns
+  gbq    - gradient boosting with a quantile loss
+Volatility (sigma) is a blend of EWMA, GJR-GARCH and HAR on the Parkinson estimator (weights from QLIKE).
+Ensemble: online weights from the pinball loss so far (past only), and finally a calibration of band coverage.
+Tercile/regime keys "spokojnie" (calm), "przeciętnie" (average), "burzliwie" (stormy) are internal dict keys read by report.py.
 """
 import warnings
 
@@ -25,15 +26,15 @@ import model as M
 warnings.filterwarnings("ignore")
 QS = np.array([0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95])
 MODELS = ["naive", "comp", "ridge", "knn", "gbq", "scan", "conf"]
-LABELS = {"naive": "Bez zmian (benchmark)", "comp": "Wskaźnik złożony", "ridge": "Regresja grzbietowa",
-          "knn": "Analogi historyczne", "gbq": "Gradient boosting kwantylowy", "scan": "Skaner świata (selekcja cech)",
-          "conf": "Potwierdzone sygnały (test z góry)", "ens": "Zespół (ensemble)"}
+LABELS = {"naive": "No change (benchmark)", "comp": "Composite indicator", "ridge": "Ridge regression",
+          "knn": "Historical analogs", "gbq": "Quantile gradient boosting", "scan": "World scanner (feature selection)",
+          "conf": "Confirmed signals (pre-registered test)", "ens": "Ensemble"}
 GENESIS = pd.Timestamp("2009-01-03")
 
 
-# ------------------------------------------------------------------ zmienność
+# ------------------------------------------------------------------ volatility
 def garch_gjr(x):
-    """GJR-GARCH(1,1), QMLE (Gaussian). x: zwroty w %. Zwraca wariancję prognozowaną na następny dzień."""
+    """GJR-GARCH(1,1), QMLE (Gaussian). x: returns in %. Returns the variance forecast for the next day."""
     n = len(x)
     v0 = np.var(x[:60])
 
@@ -54,7 +55,7 @@ def garch_gjr(x):
     res = minimize(nll, [0.1, 0.08, 0.04, 0.88], method="Nelder-Mead", options={"maxiter": 600, "xatol": 1e-4, "fatol": 1e-3})
     w, a, g, b = res.x
     h = run(res.x)
-    hn = w + (a + g * (x < 0)) * x ** 2 + b * h          # prognoza wariancji na dzień t+1 (info do t)
+    hn = w + (a + g * (x < 0)) * x ** 2 + b * h          # variance forecast for day t+1 (info up to t)
     return hn, res.x
 
 
@@ -65,7 +66,7 @@ def vol_models(df):
     ew = np.sqrt((pd.Series(r ** 2).ewm(alpha=C.EWMA_ALPHA, adjust=False, min_periods=30).mean()).to_numpy())
     hn, gjr = garch_gjr(r * 100)
     sg = np.sqrt(hn) / 100
-    # HAR na estymatorze Parkinsona (wysoki/niski dzień)
+    # HAR on the Parkinson estimator (daily high/low)
     hi, lo = df["high"].to_numpy(float), df["low"].to_numpy(float)
     park = np.log(hi / lo) ** 2 / (4 * np.log(2))
     park = pd.Series(np.where(np.isfinite(park) & (park > 0), park, np.nan)).ffill().bfill()
@@ -79,7 +80,7 @@ def vol_models(df):
     pred = Xh @ beta
     resid = y.to_numpy()[ok] - Xh[ok] @ beta
     har = np.sqrt(np.exp(pred + 0.5 * resid.var()))
-    # wagi z QLIKE względem zrealizowanej wariancji z następnych 5 dni
+    # weights from QLIKE against the realized variance of the next 5 days
     rv = pd.Series(r ** 2).rolling(5).mean().shift(-5).to_numpy()
     cand = np.column_stack([ew ** 2, sg ** 2, har ** 2])
     sel = np.isfinite(rv).copy()
@@ -96,12 +97,12 @@ def vol_models(df):
     sig = np.sqrt(cand @ np.array(bw))
     sig = pd.Series(sig).ffill().to_numpy()
     info = {"weights": dict(zip(["ewma", "garch", "har"], map(float, bw))), "qlike": float(best),
-            "phi": float(np.clip(gjr[1] + gjr[3] + 0.5 * gjr[2], 0.5, 0.999))}     # trwałość szoków zmienności (GJR-GARCH)
-    # zmienność z opcji (DVOL, Deribit, od 2021): rynek opcji wycenia przyszłe wahania. Opcje zwykle je przeszacowują,
-    # więc skalę liczymy tylko z przeszłości: mediana (zrealizowana wariancja 5 dni) / (DVOL sprzed 5 dni)^2
+            "phi": float(np.clip(gjr[1] + gjr[3] + 0.5 * gjr[2], 0.5, 0.999))}     # persistence of volatility shocks (GJR-GARCH)
+    # volatility from options (DVOL, Deribit, since 2021): the options market prices future swings. Options usually overprice them,
+    # so we compute the scale only from the past: median (realized 5-day variance) / (DVOL from 5 days earlier)^2
     if "dvol" in df and df["dvol"].notna().sum() > 400:
         dv2 = (df["dvol"].ffill(limit=3).to_numpy(float) / 100) ** 2 / 365
-        known_rv = pd.Series(r ** 2).rolling(5).mean().to_numpy()                 # znana w dniu t
+        known_rv = pd.Series(r ** 2).rolling(5).mean().to_numpy()                 # known on day t
         ratio = pd.Series(known_rv / pd.Series(dv2).shift(5).to_numpy())
         k = ratio.where(np.isfinite(ratio) & (ratio > 0)).expanding(200).median().to_numpy()
         iv = k * dv2
@@ -129,9 +130,9 @@ def _qlike(target, s2):
 
 
 def _rv_blend(df, sig, target):
-    """Zrealizowana zmienność z danych 5-minutowych (HAR-RV i HAR z semiwariancją i skokami, Corsi 2009; Patton i Sheppard 2015).
+    """Realized volatility from 5-minute data (HAR-RV and HAR with semivariance and jumps, Corsi 2009; Patton and Sheppard 2015).
     Uczciwy test: model i waga dopasowane na pierwszych 70% okresu z danymi 5-min, ocena na ostatnich 30%.
-    Do prognozy trafia tylko wtedy, gdy poprawia wynik na tej odłożonej części."""
+    It goes into the forecast only when it improves the result on that held-out part."""
     try:
         import rv as RVM
         R = RVM.load()
@@ -193,10 +194,10 @@ def _rv_blend(df, sig, target):
     q_new = _qlike(yt[tem], (1 - best["w"]) * s3[tem] + best["w"] * p[tem])
     gain = 1 - q_new / q_old
     out.update({"rv_model": best["name"], "rv_w": best["w"], "rv_gain_test": float(gain)})
-    if gain <= 0:                                      # na odłożonej części nie pomaga: nie używamy
+    if gain <= 0:                                      # does not help on the held-out part: we do not use it
         out["rv_w"] = 0.0
         return sig, out
-    # do bieżącej prognozy: ten sam model dopasowany na całej historii z danymi 5-min, ta sama waga
+    # for the current forecast: the same model fitted on the whole history with 5-min data, the same weight
     b, v = fit(cand[best["name"]][1], ok)
     X = cand[best["name"]][1]
     pf = np.full(len(idx), np.nan)
@@ -206,7 +207,7 @@ def _rv_blend(df, sig, target):
     return pd.Series(np.sqrt(mixed)).ffill().to_numpy(), out
 
 
-# ------------------------------------------------------------------ HMM (3 stany, filtrowany, bez podglądania)
+# ------------------------------------------------------------------ HMM (3 states, filtered, no peeking)
 def _emis(x, m, v):
     return np.exp(-0.5 * (x[:, None] - m[None, :]) ** 2 / v[None, :]) / np.sqrt(2 * np.pi * v[None, :]) + 1e-300
 
@@ -251,7 +252,7 @@ def hmm_fit(x, K=3, iters=25, init=None):
 
 
 def hmm_features(df):
-    """P(stan wysokiej zmienności) i oczekiwany dzienny zwrot z filtra, parametry z ekspandującego okna."""
+    """P(high-volatility state) and the expected daily return from the filter, parameters from an expanding window."""
     r = np.log(df["close"]).diff().fillna(0).to_numpy()
     n = len(r)
     p_hi, e_mu = np.full(n, np.nan), np.full(n, np.nan)
@@ -285,7 +286,7 @@ def powerlaw_z(df):
     return z
 
 
-# ------------------------------------------------------------------ macierz cech
+# ------------------------------------------------------------------ feature matrix
 def _expz(s, minp=365):
     s = pd.Series(s)
     mu, sd = s.expanding(minp).mean(), s.expanding(minp).std()
@@ -339,14 +340,14 @@ def build_features(df, f, sc, comp, ev, sig, p_hi, e_mu, pl, reg=None):
     return X, Z
 
 
-# ------------------------------------------------------------------ modele
+# ------------------------------------------------------------------ models
 def _pinball(y, q):
     d = y[:, None] - q
     return np.maximum(QS * d, (QS - 1) * d).mean(axis=1)
 
 
 def _wq(v, w, qs):
-    """Kwantyle ważone (nowsze obserwacje mają większą wagę)."""
+    """Weighted quantiles (newer observations get more weight)."""
     o = np.argsort(v)
     v, w = v[o], w[o]
     cum = (np.cumsum(w) - 0.5 * w) / w.sum()
@@ -364,7 +365,7 @@ def _ridge_fit(X, z, lam=0.25):
 
 
 def walk_forward(Zv, zt, H, N, comp_col, knn_cols, Zraw_comp, dates=None, P=None, Wz=None, conf=None):
-    """Zwraca {model: (nT,7)}, T (indeksy), y (nT), info (wyjaśnienie bieżącej prognozy)."""
+    """Returns {model: (nT,7)}, T (indices), y (nT), info (explanation of the current forecast)."""
     info = {}
     Wa = np.nan_to_num(Wz.to_numpy(float), nan=0.0) if Wz is not None else None
     Wvalid = Wz.notna().to_numpy() if Wz is not None else None
@@ -394,7 +395,7 @@ def walk_forward(Zv, zt, H, N, comp_col, knn_cols, Zraw_comp, dates=None, P=None
         b = np.cov(cp, z)[0, 1] / (cp.var() * (1 + C.SLOPE_RIDGE) + 1e-12)
         res = z - b * (cp - cp.mean())
         out["comp"][j] = b * (comp_a[t] - cp.mean()) + _wq(res - _wq(res, wt, [0.5])[0], wt, QS)
-        # sygnały, które przeszły test potwierdzający (spisany z góry): ta sama prosta regresja, tylko na znanych w t danych
+        # signals that passed the confirmation test (written down in advance): the same simple regression, only on data known at t
         if conf is not None and np.isfinite(conf[t]) and np.isfinite(conf[pool]).sum() >= C.MIN_TRAIN:
             okc = np.isfinite(conf[pool])
             cx, cz, cw = conf[pool][okc], z[okc], wt[okc]
@@ -410,7 +411,7 @@ def walk_forward(Zv, zt, H, N, comp_col, knn_cols, Zraw_comp, dates=None, P=None
         res = z - (mz + (Xp - mx) @ beta)
         pred = (Xa[t] - mx) @ beta
         out["ridge"][j] = pred + _wq(res - _wq(res, wt, [0.5])[0], wt, QS)
-        # knn (analogi)
+        # knn (analogs)
         d = np.sqrt(((Xp[:, kcols] - Xa[t, kcols]) ** 2).sum(1))
         kk = min(max(60, len(pool) // 25), len(pool))
         nn = np.argpartition(d, kk - 1)[:kk]
@@ -418,7 +419,7 @@ def walk_forward(Zv, zt, H, N, comp_col, knn_cols, Zraw_comp, dates=None, P=None
         if j == len(T_all) - 1 and dates is not None:
             contrib = (Xa[t] - mx) * beta
             info["ridge"] = sorted(zip(Zv.columns, contrib.tolist(), (Xa[t] - mx).tolist()), key=lambda a: -abs(a[1]))[:8]
-            # najbliższe analogi rozrzucone w czasie (min. 30 dni odstępu)
+            # nearest analogs spread out in time (at least 30 days apart)
             order, picked = np.argsort(d), []
             for o in order:
                 if all(abs(pool[o] - pool[p]) > 30 for p in picked):
@@ -429,14 +430,14 @@ def walk_forward(Zv, zt, H, N, comp_col, knn_cols, Zraw_comp, dates=None, P=None
             nd = np.sort(pool[nn])
             info["knn_all"] = {"n": int(kk), "up": float(np.mean(z[nn] > 0)), "median_ret": float(np.median([(P[pool[o] + H] / P[pool[o]] - 1) * 100 for o in nn])),
                                "episodes": int(1 + np.sum(np.diff(nd) > 45))}
-        # gradient boosting kwantylowy (refit raz na 365 dni)
+        # quantile gradient boosting (refit once every 365 days)
         if gb_models is None or t >= next_refit:
             zc = np.clip(z, -6, 6)
             gb_models = [HistGradientBoostingRegressor(loss="quantile", quantile=q, max_iter=60, max_depth=3, learning_rate=0.06,
                                                        min_samples_leaf=60, l2_regularization=1.0, random_state=0).fit(Xp, zc) for q in QS]
             next_refit = t + 365
         out["gbq"][j] = np.sort([m.predict(Xa[t:t + 1])[0] for m in gb_models])
-        # skaner świata: selekcja najsilniejszych cech z setek szeregów (tylko na danych znanych w t, odświeżana co rok)
+        # world scanner: picks the strongest features out of hundreds of series (only on data known at t, refreshed every year)
         if Wa is not None:
             if sel is None or t >= next_sel:
                 zc = (z - z.mean()) / (z.std() + 1e-9)
@@ -457,14 +458,14 @@ def walk_forward(Zv, zt, H, N, comp_col, knn_cols, Zraw_comp, dates=None, P=None
 
 
 def _step(H):
-    """Krok testu „jak na żywo”: krótkie horyzonty co dzień (7× więcej prób), długie co tydzień (koszt obliczeń).
-    Zmiana z 2026-10-30 (punkt 4 planu); wcześniej wszystkie horyzonty co 7 dni."""
+    """Step of the "as if live" test: short horizons every day (7x more trials), long ones every week (computing cost).
+    Change from 2026-10-30 (item 4 of the plan); before that all horizons every 7 days."""
     return 1 if H <= 7 else C.WF_STEP
 
 
 def _dm(l0, l1, lag):
-    """Test Diebolda-Mariano (jednostronny: czy l1 ma mniejszą stratę), błąd Neweya-Westa z oknem lag,
-    z poprawką Harveya, Leybourne'a i Newbolda (1997) dla małych prób i rozkładem t (od 2026-10-30)."""
+    """Diebold-Mariano test (one-sided: does l1 have a smaller loss), Newey-West error with window lag,
+    with the Harvey, Leybourne and Newbold (1997) small-sample correction and a t distribution (since 2026-10-30)."""
     d = l0 - l1
     d = d[np.isfinite(d)]
     if len(d) < 30:
@@ -482,7 +483,7 @@ def _dm(l0, l1, lag):
 
 
 def _mde(l0, l1, lag, alpha=0.10, power=0.80):
-    """Najmniejsza przewaga (ułamek straty „bez zmian”), którą ten test wykryłby w 4 na 5 przypadków przy danej liczbie prób."""
+    """The smallest edge (as a fraction of the "no change" loss) that this test would detect 4 times out of 5 with the given number of trials."""
     d = l0 - l1
     ok = np.isfinite(d)
     d, l0 = d[ok], l0[ok]
@@ -498,7 +499,7 @@ def _mde(l0, l1, lag, alpha=0.10, power=0.80):
 
 
 def calibrate(q, y, lag):
-    """Online: skala pasma tak, by 80% przeszłych obserwacji mieściło się w [P10, P90]. Tylko przeszłość."""
+    """Online: band scale such that 80% of past observations fall within [P10, P90]. Past only."""
     nT = len(q)
     cal = np.ones(nT)
     grid = np.arange(0.6, 2.01, 0.05)
@@ -516,13 +517,13 @@ def calibrate(q, y, lag):
 
 
 def combine(out, y, H):
-    """Zespół z wagami online (tylko przeszłość) + kalibracja pokrycia. Ostatni wiersz to prognoza bieżąca."""
+    """Ensemble with online weights (past only) + coverage calibration. The last row is the current forecast."""
     nT = len(y)
     lag = int(np.ceil(H / _step(H))) + 1
     raw = out
     out = {}
     for m in MODELS:
-        out[m], _ = calibrate(raw[m], y, lag)          # każdy model skalibrowany osobno (uczciwe porównanie)
+        out[m], _ = calibrate(raw[m], y, lag)          # each model calibrated separately (a fair comparison)
     L = {m: np.where(np.isfinite(y), _pinball(np.nan_to_num(y), out[m]), np.nan) for m in MODELS}
     ens = np.full((nT, 7), np.nan)
     wts = np.zeros((nT, len(MODELS)))
@@ -550,7 +551,7 @@ def combine(out, y, H):
         mix = sum(w[m] / sw * out[m][k] for m in w if np.isfinite(out[m][k]).all())
         bm = max(pos, key=pos.get)
         _, pv = _dm(L["naive"][j], L[bm][j], lag)
-        gate = float(np.clip((0.10 - pv) / 0.07, 0, 1)) if np.isfinite(pv) else 0.0   # wymaga istotności statystycznej
+        gate = float(np.clip((0.10 - pv) / 0.07, 0, 1)) if np.isfinite(pv) else 0.0   # requires statistical significance
         alpha = min(1.0, best / 0.02) * gate
         if alpha <= 0:
             ens[k] = base
@@ -561,13 +562,13 @@ def combine(out, y, H):
         wts[k, 0] = 1 - alpha
         for i, m in enumerate(MODELS[1:], 1):
             wts[k, i] = alpha * w[m] / sw
-    cal = np.array([float(np.nanmedian(np.array([1.0])))] * nT)     # składniki są już skalibrowane osobno
+    cal = np.array([float(np.nanmedian(np.array([1.0])))] * nT)     # the components are already calibrated separately
     return ens, ens, wts, alphas, cal, L, out
 
 
 def aci(q, y, lag, gamma=0.05):
-    """Adaptacyjne pasma (Gibbs i Candès 2021, ACI): szerokość pasma rośnie, gdy ostatnio cena częściej z niego wypadała,
-    i maleje, gdy mieściła się częściej niż powinna. Uczy się tylko na prognozach, których termin już minął (opóźnienie lag)."""
+    """Adaptive bands (Gibbs and Candes 2021, ACI): the band gets wider when the price has recently fallen outside it more often,
+    and narrower when it stayed inside more often than it should. It learns only from forecasts whose due date has passed (delay lag)."""
     n = len(q)
     out = q.copy()
     ls = 0.0
@@ -591,8 +592,8 @@ def _cov_err(q, y):
 
 
 HOLDOUT = pd.Timestamp("2024-10-29")
-# Reguła egzaminu (spisana 2026-10-29, przed zobaczeniem wyników): wybór metody tylko na prognozach, których wynik był znany
-# przed HOLDOUT; zwycięzca wchodzi do prognozy od dziś tylko, jeśli na odciętych 2 latach też bije „bez zmian” z p < 0,10 (DM, HAC).
+# Exam rule (written down 2026-10-29, before seeing the results): the method is chosen only on forecasts whose outcome was known
+# before HOLDOUT; the winner goes into the forecast from today only if on the held-out 2 years it also beats "no change" with p < 0.10 (DM, HAC).
 HOLDOUT_P = 0.10
 
 
@@ -621,8 +622,8 @@ def holdout(out, cens, y, H, dates):
     best = max(cands, key=lambda m: cands[m]["skill_pre"])
     b = cands[best]
     passed = b["skill_pre"] > 0 and b["skill_post"] > 0 and np.isfinite(b["p_post"]) and b["p_post"] < HOLDOUT_P
-    # mniej niż 20 niezależnych obserwacji na egzaminie: brak wyniku to „nierozstrzygnięte”, a nie „nie zdany”
-    # (dopuszczenia do prognozy to nie zmienia: nierozstrzygnięte nadal znaczy „nie używamy”)
+    # fewer than 20 independent observations on the exam: no result means "inconclusive", not "failed"
+    # (this does not change admission to the forecast: inconclusive still means "we do not use it")
     verdict = "passed" if passed else ("inconclusive" if b["n_eff_post"] < 20 else "failed")
     return {"rows": rows, "chosen": best, "passed": bool(passed), "verdict": verdict, "from": str(HOLDOUT.date()), "q_live": cand[best][-1].tolist()}
 
@@ -638,12 +639,12 @@ def evaluate(out, cens, y, H, L):
         t, p = _dm(l0, lm, lag) if m != "naive" else (np.nan, np.nan)
         rows.append({"model": m, "label": LABELS[m], "loss": float(np.nanmean(lm)), "skill": float(1 - np.nanmean(lm) / np.nanmean(l0)),
                      "dm_t": t, "dm_p": p, "cover80": cover(out[m]), "mde": _mde(l0, lm, lag) if m != "naive" else np.nan})
-    # prosta średnia wszystkich metod (1/N): w badaniach często wygrywa z wyszukanym ważeniem („forecast combination puzzle”)
+    # simple average of all methods (1/N): in studies it often beats fancy weighting (the "forecast combination puzzle")
     eq = np.sort(np.nanmean(np.stack([out[m] for m in MODELS[1:]]), axis=0), axis=1)
     okq = ok & np.isfinite(eq).all(axis=1)
     lq = _pinball(np.nan_to_num(y), eq)[okq]
     tq, pq = _dm(L["naive"][okq], lq, lag)
-    rows.append({"model": "eq", "label": "Prosta średnia metod (1/N)", "loss": float(lq.mean()), "skill": float(1 - lq.mean() / L["naive"][okq].mean()),
+    rows.append({"model": "eq", "label": "Simple average of methods (1/N)", "loss": float(lq.mean()), "skill": float(1 - lq.mean() / L["naive"][okq].mean()),
                  "dm_t": tq, "dm_p": pq, "cover80": float(np.mean((y[okq] >= eq[okq, 1]) & (y[okq] <= eq[okq, 5])))})
     le = _pinball(np.nan_to_num(y), cens)[ok]
     t, p = _dm(l0, le, lag)
@@ -652,18 +653,18 @@ def evaluate(out, cens, y, H, L):
     return rows, int(ok.sum())
 
 
-# ------------------------------------------------------------------ całość
+# ------------------------------------------------------------------ putting it all together
 def horizon_sigma(sig, H, phi, s_lr):
-    """Zmienność na H dni, która wraca do normy (Diebold i in. 1998): zamiast sigma_t·√H średnia z prognoz wariancji
-    na kolejne dni, gdy dzisiejsza odchyłka od normy wygasa w tempie phi. Norma = mediana z ostatnich 2 lat (tylko przeszłość)."""
+    """H-day volatility that returns to normal (Diebold et al. 1998): instead of sigma_t*sqrt(H), the average of the variance forecasts
+    for the coming days as today's deviation from normal fades at rate phi. Normal = median of the last 2 years (past only)."""
     k = np.arange(1, H + 1)
-    w = (phi ** k).mean()                               # średni udział dzisiejszej odchyłki w kolejnych H dniach
+    w = (phi ** k).mean()                               # average share of today's deviation over the next H days
     lr2 = np.where(np.isfinite(s_lr), s_lr ** 2, sig ** 2)
     return np.sqrt(H * (lr2 + (sig ** 2 - lr2) * w))
 
 
-# Reguła (spisana 2026-10-30, przed zobaczeniem wyników): skalowanie z powrotem do normy zastępuje sigma·√H na danym horyzoncie,
-# jeśli rozkład bazowy („bez zmian”) ma z nim mniejszą stratę pinball przed odcięciem (DM, HAC, p < 0,10) i dodatnią przewagę po nim.
+# Rule (written down 2026-10-30, before seeing the results): scaling with a return to normal replaces sigma*sqrt(H) on a given horizon
+# if the base distribution ("no change") has a smaller pinball loss with it before the cutoff (DM, HAC, p < 0.10) and a positive edge after it.
 def scale_test(P, sig, sigH, H, dates):
     N = len(P)
     y = np.full(N, np.nan)
@@ -682,7 +683,7 @@ def scale_test(P, sig, sigH, H, dates):
         wt = 0.5 ** ((t - pool) / HALF_LIFE)
         qo = _wq(z_old[pool], wt, QS); qo = qo - qo[3]
         qn = _wq(z_new[pool], wt, QS); qn = qn - qn[3]
-        yt = y[t] / s_old[t]                            # ta sama skala oceny dla obu wariantów
+        yt = y[t] / s_old[t]                            # the same scoring scale for both variants
         po, pn = qo, qn * sigH[t] / s_old[t]
         st = 0 if sig[t] <= lo_q[t] else (2 if sig[t] > hi_q[t] else 1)
         rows.append((dates[t], _pinball(np.array([yt]), po[None, :])[0], _pinball(np.array([yt]), pn[None, :])[0],
@@ -705,11 +706,11 @@ def scale_test(P, sig, sigH, H, dates):
             "n_pre": int(pre.sum()), "n_post": int(post.sum()), "terciles": terc_cov}
 
 
-# Wyścig zmienności z danych 5-minutowych (spisany 2026-10-31, przed wynikami). Kandydaci: HAR-RV (Corsi 2009) i HARQ
-# (Bollerslev, Patton i Quaedvlieg 2016: waga wczorajszej zmienności maleje, gdy jej pomiar jest niepewny, czyli przy dużej kwartyczności RQ).
-# Obaj prognozują wprost średnią wariancję z kolejnych H dni, dopasowani od nowa na początku każdego roku tylko na znanych już wynikach.
-# Sędzia: strata pinball końcowego pasma (7 kwantyli z przeszłych odchyleń, jak w scale_test), na tych samych dniach dla wszystkich.
-# Kandydat zastępuje obecną skalę na horyzoncie H, jeśli ma mniejszą stratę przed 2024-10-29 (DM, HAC, p < 0,10) i dodatnią przewagę po tej dacie.
+# Volatility race on 5-minute data (written down 2026-10-31, before the results). Candidates: HAR-RV (Corsi 2009) and HARQ
+# (Bollerslev, Patton and Quaedvlieg 2016: the weight of yesterday's volatility shrinks when its measurement is uncertain, i.e. at high quarticity RQ).
+# Both forecast the average variance over the next H days directly, refitted at the start of every year only on outcomes already known.
+# Judge: pinball loss of the final band (7 quantiles from past deviations, as in scale_test), on the same days for all.
+# A candidate replaces the current scale on horizon H if it has a smaller loss before 2024-10-29 (DM, HAC, p < 0.10) and a positive edge after that date.
 def rv_features(df):
     try:
         import rv as RVM
@@ -724,7 +725,7 @@ def rv_features(df):
 
 
 def _rv_fit_pred(F, H, dates):
-    """Prognozy wariancji na H dni (średnia dzienna) z HAR-RV i HARQ, przeuczane co rok. Zwraca {nazwa: tablica}."""
+    """H-day variance forecasts (daily average) from HAR-RV and HARQ, retrained every year. Returns {name: array}."""
     tgt = F["d"][::-1].rolling(H, min_periods=H).mean()[::-1].shift(-1).to_numpy()
     Xs = {"har_rv": np.column_stack([F["d"], F["w"], F["m"]]), "harq": np.column_stack([F["d"], F["w"], F["m"], F["q"]])}
     N = len(dates)
@@ -745,7 +746,7 @@ def _rv_fit_pred(F, H, dates):
             seg = np.arange(ia, ib)
             seg = seg[np.isfinite(A[seg]).all(axis=1)]
             p = A[seg] @ beta
-            out[k][seg] = np.maximum(p, np.nanmin(tgt[tr]))              # zabezpieczenie: prognoza wariancji nie może być ujemna
+            out[k][seg] = np.maximum(p, np.nanmin(tgt[tr]))              # safeguard: a variance forecast cannot be negative
     return out
 
 
@@ -816,7 +817,7 @@ def run(df, ev, f, sc, comp, reg=None, world_T=None, conf=None, horizons=None):
         st = scale_test(P, sig, sigH, H, df.index)
         scale_arr = sigH if st.get("used") else sig * np.sqrt(H)
         race = rv_race(P, scale_arr, RVF, H, df.index) if H <= 7 else {}
-        if race.get("used"):                                   # wygrał wyścig: tam, gdzie są dane 5-min, skala z HAR/HARQ
+        if race.get("used"):                                   # won the race: where 5-min data exists, the scale comes from HAR/HARQ
             scale_arr = np.where(np.isfinite(race["scale"]), race["scale"], scale_arr)
         race.pop("scale", None)
         zt = np.full(N, np.nan)
@@ -830,7 +831,7 @@ def run(df, ev, f, sc, comp, reg=None, world_T=None, conf=None, horizons=None):
         ok_ = np.isfinite(y) & np.isfinite(cens).all(axis=1) & np.isfinite(qa).all(axis=1)
         pb0 = float(_pinball(np.nan_to_num(y[ok_]), cens[ok_]).mean())
         pb1 = float(_pinball(np.nan_to_num(y[ok_]), qa[ok_]).mean())
-        use_aci = e1 < e0 and pb1 <= pb0 * 1.01               # lepsze pokrycie i nie gorsza ogólna trafność
+        use_aci = e1 < e0 and pb1 <= pb0 * 1.01               # better coverage and no worse overall accuracy
         aci_info = {"used": bool(use_aci), "cov80_before": c80_0, "cov90_before": c90_0, "cov80_aci": c80_1, "cov90_aci": c90_1,
                     "pinball_before": pb0, "pinball_aci": pb1}
         if use_aci:
@@ -838,11 +839,11 @@ def run(df, ev, f, sc, comp, reg=None, world_T=None, conf=None, horizons=None):
         rows, nok = evaluate(out, cens, y, H, L)
         ho = holdout(out, cens, y, H, df.index[T])
         q = cens[-1]
-        if ho.get("passed") and ho["chosen"] != "ens":           # zdał egzamin na odciętych 2 latach: wchodzi do prognozy od dziś
+        if ho.get("passed") and ho["chosen"] != "ens":           # passed the exam on the held-out 2 years: goes into the forecast from today
             q = np.array(ho["q_live"])
         scale = float(scale_arr[-1])
         prices = {f"p{int(a * 100)}": float(P[-1] * np.exp(scale * v)) for a, v in zip(QS, q)}
-        # audyt: pokrycie końcowego pasma 80% w spokojnych, przeciętnych i burzliwych okresach (tercyle z ostatnich 3 lat)
+        # audit: coverage of the final 80% band in calm, average and stormy periods (terciles of the last 3 years)
         tq = pd.Series(sig).rolling(1095, min_periods=365)
         lo_q, hi_q = tq.quantile(1 / 3).to_numpy()[T], tq.quantile(2 / 3).to_numpy()[T]
         okc = np.isfinite(y) & np.isfinite(cens).all(axis=1) & np.isfinite(lo_q)
@@ -855,7 +856,7 @@ def run(df, ev, f, sc, comp, reg=None, world_T=None, conf=None, horizons=None):
                               "calibration": float(cal[-1]), "live_z": {m: out[m][-1].tolist() for m in MODELS}, "ens_z": q.tolist(),
                               "explain": info, "sigma_H": scale, "aci": aci_info, "scale_test": st, "rv_race": race, "audit": audit,
                               "holdout": {k: v for k, v in ho.items() if k != "q_live"}}
-        view = np.nanmean([out["comp"][-1], out["ridge"][-1]], axis=0)       # pogląd modeli wskaźników (bez potwierdzonej przewagi)
+        view = np.nanmean([out["comp"][-1], out["ridge"][-1]], axis=0)       # the view of the indicator models (no confirmed edge)
         vcdf0 = float(np.interp(0.0, view, QS, left=0.0, right=1.0)) if np.all(np.diff(view) > 0) else 0.5
         res["forecasts"].append({"horizon": H, "target": (df.index[-1] + pd.Timedelta(days=H)).strftime("%Y-%m-%d"),
                                  "prob_up": float(1 - cdf0), **prices,

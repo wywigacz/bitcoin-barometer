@@ -1,15 +1,16 @@
-"""Wirtualny trader (edukacyjny eksperyment, bez prawdziwych pieniędzy i transakcji), od 2026-10-31.
+"""A virtual trader (an educational experiment, no real money and no real trades), since 2026-10-31.
 
-Przejmuje portfel na żywo z sim.py (ten sam stan gotówki i BTC na 30.10.2026) i od tej chwili decyduje przy każdej aktualizacji
-w chmurze, czyli co ok. 6 godzin, po bieżącej cenie z Bitstamp (kurs złotego z NBP). Zasady (spisane 2026-10-31, jawne):
-  - wpłaty: 10 000 zł przy pierwszej decyzji w każdym miesiącu,
-  - cel: jak najwięcej złotych na koniec, czyli maksymalny wzrost wartości portfela w długim okresie,
-  - udział BTC wyznaczają te same trzy strategie co w sim.py, ważone algorytmem Hedge (strategia, która w ostatnim roku
-    pomnożyłaby pieniądze najbardziej, dostaje największy głos); sygnał trendu liczony z bieżącej ceny, nie z wczorajszego zamknięcia,
-  - handel tylko, gdy cel różni się od obecnego udziału o więcej niż 5 pkt proc. (prowizja 0,2% od obrotu zjadałaby zysk z drobnych ruchów),
-  - każdą decyzję zapisujemy z uzasadnieniem i z warunkiem, przy którym trader zmieni zdanie; dziennik jest tylko dopisywany,
-  - każdą transakcję rozliczamy po 1 i 7 dniach: o ile złotych lepiej lub gorzej wyszła niż pozostawienie portfela bez zmian.
-Decyzje zapisuje tylko przebieg w chmurze (GITHUB_ACTIONS) albo uruchomienie z BTC_TRADER=1; zwykły przebieg lokalny tylko czyta dziennik."""
+It takes over the live portfolio from sim.py (the same cash and BTC as on Oct 30, 2026) and from then on decides at every cloud
+update, that is about every 6 hours, at the current Bitstamp price (PLN exchange rate from the NBP). Rules (written down 2026-10-31, public):
+  - deposits: 10,000 PLN at the first decision of every month,
+  - goal: as many zlotys as possible at the end, i.e. the highest growth of the portfolio value over the long run,
+  - the BTC share is set by the same three strategies as in sim.py, weighted with the Hedge algorithm (the strategy that would
+    have multiplied the money the most over the last year gets the biggest say); the trend signal uses the current price, not yesterday's close,
+  - trade only when the target differs from the current share by more than 5 percentage points (a 0.2% fee on each trade would eat the gain from small moves),
+  - every decision is recorded with its reasons and the condition under which the trader will change its mind; the log is append-only,
+  - every trade is scored after 1 and 7 days: how many PLN better or worse it did than leaving the portfolio unchanged.
+Decisions are written only by the cloud run (GITHUB_ACTIONS) or a run with BTC_TRADER=1; a normal local run only reads the log.
+Action codes KUP (buy) / SPRZEDAJ (sell) / TRZYMAJ (hold) are internal values stored in data/trader_log.csv; do not rename them."""
 import os
 
 import numpy as np
@@ -21,7 +22,7 @@ import sim as SI
 
 LOG = C.DATA_DIR / "trader_log.csv"
 START = pd.Timestamp("2026-10-31")
-MIN_GAP_H = 3                                        # dwie decyzje nie częściej niż co 3 godziny
+MIN_GAP_H = 3                                        # no two decisions closer than 3 hours apart
 TZ = "Europe/Warsaw"
 
 
@@ -38,11 +39,11 @@ def _usdpln(fallback):
         r = requests.get("https://api.nbp.pl/api/exchangerates/rates/a/usd/?format=json", timeout=20).json()
         return float(r["rates"][0]["mid"]), "NBP"
     except Exception:
-        return float(fallback), "ostatni znany kurs"
+        return float(fallback), "last known"
 
 
 def _zl(v):
-    return f"{v:,.0f}".replace(",", " ") + " zł"
+    return f"{v:,.0f} PLN"
 
 
 def _pc(v):
@@ -50,7 +51,7 @@ def _pc(v):
 
 
 def _start_state():
-    """Stan portfela przejęty z dziennika sim.py (ostatni dzień przed startem tradera)."""
+    """Portfolio state taken over from the sim.py log (the last day before the trader's start)."""
     s = pd.read_csv(SI.LIVE_LOG)
     s = s[pd.to_datetime(s["date"]) < START]
     last = s.iloc[-1]
@@ -59,40 +60,41 @@ def _start_state():
 
 
 def _explain(ctx, t, p, w_now, target, action, amt, deposit):
-    """Uzasadnienie w trzech częściach: co widzę, co robię i dlaczego, kiedy zmienię zdanie."""
+    """Reasons in three parts: what I see, what I do and why, when I will change my mind."""
     best = max(SI.STRATS, key=lambda k: p[k])
     chg = ctx["chg24"]
-    dec = lambda v, f: format(v, f).replace(".", ",")
-    usd = format(ctx["usd"], ",.0f").replace(",", " ")
-    seen = (f"Bitcoin kosztuje {usd} USD, czyli {_zl(ctx['px'])}"
-            + (f"; w ciągu doby {dec(chg * 100, '+.1f')}%" if chg is not None else "")
-            + f". W ciągu 28 dni cena {'wzrosła' if ctx['mom28'] > 0 else 'spadła'} o {dec(abs(np.expm1(ctx['mom28'])) * 100, '.1f')}%"
-            + f", więc trend jest {'wzrostowy' if ctx['mom28'] > 0 else 'spadkowy'}. Prognozowane wahania: {ctx['vol_y']:.0f}% rocznie wobec typowych {ctx['vol_n']:.0f}%"
-            + (" (spokojniej niż zwykle)." if ctx["vol_y"] < ctx["vol_n"] else " (burzliwiej niż zwykle).")
-            + (f" Szansa burzliwego tygodnia: {_pc(ctx['storm'])}." if ctx.get("storm") is not None else ""))
-    why = (f"Trzy strategie chcą: regularne {_pc(t['regularne'])}, ryzyko {_pc(t['ryzyko'])}, trend {_pc(t['trend'])} w BTC. "
-           f"Najwięcej zarobiłaby w ostatnim roku „{best}”, więc ma największy głos ({_pc(p[best])}). Średnia ważona daje cel {_pc(target)} w BTC; teraz mam {_pc(w_now)}.")
-    dep = f"Wpłynęło {_zl(deposit)} miesięcznej wpłaty. " if deposit else ""
-    act = {"KUP": f"Kupuję BTC za {_zl(amt)}.",
-           "SPRZEDAJ": f"Sprzedaję BTC za {_zl(amt)}.",
-           "TRZYMAJ": f"Nic nie robię: różnica to tylko {abs(target - w_now) * 100:.0f} pkt proc., a prowizja zjadłaby zysk z takiej korekty."}[action]
+    up = ctx["mom28"] > 0
+    seen = (f"Bitcoin costs {ctx['usd']:,.0f} USD, which is {_zl(ctx['px'])}"
+            + (f"; {chg * 100:+.1f}% over the last 24 hours" if chg is not None else "")
+            + f". Over 28 days the price {'rose' if up else 'fell'} by {abs(np.expm1(ctx['mom28'])) * 100:.1f}%"
+            + f", so the trend is {'up' if up else 'down'}. Expected swings: {ctx['vol_y']:.0f}% a year against a typical {ctx['vol_n']:.0f}%"
+            + (" (calmer than usual)." if ctx["vol_y"] < ctx["vol_n"] else " (stormier than usual).")
+            + (f" Chance of a stormy week: {_pc(ctx['storm'])}." if ctx.get("storm") is not None else ""))
+    why = (f"The three strategies want: steady {_pc(t['regularne'])}, risk {_pc(t['ryzyko'])}, trend {_pc(t['trend'])} in BTC. "
+           f"“{SI.NAMES[best].capitalize()}” would have earned the most over the last year, so it has the biggest say ({_pc(p[best])}). "
+           f"The weighted average gives a target of {_pc(target)} in BTC; right now I hold {_pc(w_now)}.")
+    dep = f"The monthly deposit of {_zl(deposit)} came in. " if deposit else ""
+    gap = round(abs(target - w_now) * 100)
+    act = {"KUP": f"I buy BTC for {_zl(amt)}.",
+           "SPRZEDAJ": f"I sell BTC for {_zl(amt)}.",
+           "TRZYMAJ": f"I do nothing: the gap is only {gap} percentage point{'' if gap == 1 else 's'}, and the fee would eat the gain from such a small adjustment."}[action]
     flip = ctx["px28"]
-    if ctx["mom28"] > 0:
-        cond = (f"Zmienię zdanie, jeśli cena spadnie poniżej {_zl(flip)} (poziom sprzed 28 dni): trend się odwróci, "
-                f"a strategia trendu zejdzie ze 100% do 25% w BTC, więc część sprzedam.")
+    if up:
+        cond = (f"I will change my mind if the price falls below {_zl(flip)} (the level of 28 days ago): the trend would turn, "
+                f"the trend strategy would drop from 100% to 25% in BTC, and I would sell some.")
     else:
-        cond = (f"Zmienię zdanie, jeśli cena wzrośnie powyżej {_zl(flip)} (poziom sprzed 28 dni): trend się odwróci "
-                f"i strategia trendu podniesie udział BTC do 100%, więc dokupię.")
+        cond = (f"I will change my mind if the price rises above {_zl(flip)} (the level of 28 days ago): the trend would turn, "
+                f"the trend strategy would raise the BTC share to 100%, and I would buy more.")
     return {"seen": seen, "do": dep + act + " " + why, "change": cond}
 
 
 def _score(log, px_now, now):
-    """Rozliczenie transakcji: wynik po 1 i 7 dniach względem pozostawienia portfela bez zmian (bez prowizji = zysk z decyzji minus koszt)."""
+    """Trade scorecard: the result after 1 and 7 days compared with leaving the portfolio unchanged (gain from the decision minus the fee)."""
     out = []
     tr = log[log["action"] != "TRZYMAJ"]
     for _, r in tr.iterrows():
         t0 = pd.Timestamp(r["ts"])
-        dq = float(r["btc_after"]) - float(r["btc_before"])            # ile BTC przybyło (+) lub ubyło (−)
+        dq = float(r["btc_after"]) - float(r["btc_before"])            # how much BTC was added (+) or removed (-)
         res = {"ts": r["ts"], "action": r["action"], "amount_pln": float(r["amount_pln"])}
         for h, lab in ((1, "d1"), (7, "d7")):
             later = log[pd.to_datetime(log["ts"]) >= t0 + pd.Timedelta(days=h)]
@@ -112,10 +114,10 @@ def run(df, sig, VE=None):
     due = len(old) == 0 or now - pd.Timestamp(old.iloc[-1]["ts"]) >= pd.Timedelta(hours=MIN_GAP_H)
     usd, open24, src = _live_price()
     if usd is None:
-        usd, open24, src = float(df["close"].iloc[-1]), float(df["close"].iloc[-2]), "zamknięcie dnia"
+        usd, open24, src = float(df["close"].iloc[-1]), float(df["close"].iloc[-2]), "daily close"
     fx, fx_src = _usdpln(x["pln"])
     px = usd * fx
-    c28 = float(df["close"].iloc[-28])                               # zamknięcie sprzed 28 dni (jak w strategii trendu)
+    c28 = float(df["close"].iloc[-28])                               # close from 28 days ago (as in the trend strategy)
     mom28 = float(np.log(usd / c28))
     t_live = dict(t, trend=1.0 if mom28 > 0 else 0.25)
     target = float(sum(p[k] * t_live[k] for k in SI.STRATS))
@@ -152,7 +154,7 @@ def run(df, sig, VE=None):
                 action = "SPRZEDAJ"
         ex = _explain(ctx, t_live, p, w_now, target, action, amt, deposit)
         new = {"ts": now.strftime("%Y-%m-%d %H:%M"), "local": now.tz_localize("UTC").tz_convert(TZ).strftime("%Y-%m-%d %H:%M"),
-               "price_usd": round(usd, 2), "usdpln": round(fx, 4), "price_pln": round(px, 2), "src": f"{src}, kurs {fx_src}",
+               "price_usd": round(usd, 2), "usdpln": round(fx, 4), "price_pln": round(px, 2), "src": f"{src}, {fx_src} rate",
                "deposit": deposit, "action": action, "amount_pln": round(amt, 2), "target": round(target, 4), "w_before": round(w_now, 4),
                "btc_before": btc0, "btc_after": btc, "btc": btc, "cash": round(cash, 2), "value": round(cash + btc * px, 2),
                "deposited": dep, "dca_btc": dca_btc, "dca_value": round(dca_btc * px, 2), "last_month": ym,

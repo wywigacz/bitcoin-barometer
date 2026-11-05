@@ -1,4 +1,4 @@
-"""Zapis danych dziennych i dziennik prognoz (z samooceną)."""
+"""Saving daily data and the forecast log (with self-assessment)."""
 import numpy as np
 import pandas as pd
 
@@ -16,15 +16,15 @@ def load_daily():
     return df
 
 
-# Strażnik danych: w październiku 2026 kilka kolumn wymieszało się między sobą (np. cena w wonach w kolumnie DVOL).
-# Wartości niemożliwe fizycznie usuwamy, zanim trafią do modeli.
-_in = lambda s, lo, hi: s.isna() | s.between(lo, hi)           # brak danych do porównania nie jest błędem
+# Data guard: in October 2026 a few columns got mixed up with each other (e.g. the price in won in the DVOL column).
+# We remove physically impossible values before they reach the models.
+_in = lambda s, lo, hi: s.isna() | s.between(lo, hi)           # missing data to compare against is not an error
 CHECKS = {
     "cbclose": lambda d: _in(d["cbclose"] / d["close"], 0.8, 1.25),
     "dvol": lambda d: _in(d["dvol"], 10, 400),
     "btckrw": lambda d: _in(d["btckrw"] / d["usdkrw"].ffill(limit=5) / d["close"], 0.6, 2.0) if "usdkrw" in d else d["btckrw"] > 0,
     "pcr": lambda d: _in(d["pcr"], 0.05, 20),
-    "cot_lev": lambda d: _in(d["cot_lev"], -1, 1),           # pozycja netto jako ułamek otwartych pozycji
+    "cot_lev": lambda d: _in(d["cot_lev"], -1, 1),           # net position as a fraction of open interest
     "fng": lambda d: _in(d["fng"], 0, 100),
 }
 
@@ -33,9 +33,9 @@ def sanity(df):
     for col, ok in CHECKS.items():
         if col in df:
             m = ok(df) | df[col].isna()
-            m = m.fillna(True)                       # brak danych do porównania: zostawiamy
+            m = m.fillna(True)                       # no data to compare against: we leave it
             if (~m).any():
-                print(f"  [strażnik] {col}: usunięto {int((~m).sum())} nieprawdopodobnych wartości")
+                print(f"  [guard] {col}: removed {int((~m).sum())} implausible value{'s' if int((~m).sum()) != 1 else ''}")
                 df.loc[~m, col] = np.nan
     return df
 
@@ -43,7 +43,7 @@ def sanity(df):
 def merge_save(old, fetched):
     new = pd.DataFrame(fetched)
     new.index.name = "date"
-    merged = new.combine_first(old) if len(old) else new     # nowe wartości mają pierwszeństwo
+    merged = new.combine_first(old) if len(old) else new     # new values take priority
     merged = merged.sort_index()
     merged = sanity(merged)
     C.DATA_DIR.mkdir(exist_ok=True)
@@ -58,7 +58,7 @@ def load_log():
 
 
 def update_log(res, df):
-    """Dopisz dzisiejsze prognozy (1 wiersz na horyzont/dzień) i uzupełnij zrealizowane wyniki."""
+    """Append today's forecasts (1 row per horizon/day) and fill in the realized outcomes."""
     log = load_log()
     made = pd.Timestamp(res["asof"])
     rows = [{"made_on": made, "horizon": f["horizon"], "target_date": pd.Timestamp(f["target"]),
@@ -68,7 +68,7 @@ def update_log(res, df):
              "p5": f.get("p5"), "p95": f.get("p95"), "prob_up": f.get("prob_up")} for f in res["forecasts"]]
     new = pd.DataFrame(rows, columns=LOG_COLS)
     if len(log):
-        # tylko dopisywanie (od 2026-10-30): pierwszy zapis z danego dnia wygrywa, wcześniejszych prognoz nigdy nie poprawiamy
+        # append-only (since 2026-10-30): the first record of a given day wins, we never correct earlier forecasts
         key = log["made_on"].astype(str) + "|" + log["horizon"].astype(str)
         new = new[~(new["made_on"].astype(str) + "|" + new["horizon"].astype(str)).isin(key)]
         log = pd.concat([log, new], ignore_index=True) if len(new) else log
@@ -103,9 +103,9 @@ def _code_version():
 
 
 def update_ledger(asof, price, ens, close):
-    """Dziennik na przyszłość (od 2026-10-30): codziennie kwantyle KAŻDEJ metody na każdy horyzont, w cenach, z numerem wersji kodu.
-    Tylko dopisywany: wiersz (dzień, horyzont, metoda) zapisany raz nigdy się nie zmienia; po terminie dopisujemy tylko wynik.
-    To jedyny w pełni czysty test: żadna z tych prognoz nie mogła widzieć swojej przyszłości."""
+    """Ledger for the future (since 2026-10-30): every day the quantiles of EVERY method for every horizon, in prices, with the code version.
+    Append-only: a row (day, horizon, method) once written never changes; after the due date we only add the outcome.
+    This is the only fully clean test: none of these forecasts could have seen its own future."""
     made = pd.Timestamp(asof)
     sha = _code_version()
     rows = []
@@ -148,7 +148,7 @@ def update_ledger(asof, price, ens, close):
 
 
 def ledger_stats(L):
-    """Rozliczenie dziennika: dla każdej metody i horyzontu pokrycie pasma 80% i przewaga nad „bez zmian” (tylko rozstrzygnięte)."""
+    """Ledger scorecard: for each method and horizon, coverage of the 80% band and the edge over "no change" (settled rows only)."""
     if L is None or L.empty:
         return None
     d = L.dropna(subset=["actual"])
@@ -166,14 +166,14 @@ def log_stats(log):
     d = log.dropna(subset=["actual"])
     if d.empty:
         return None
-    # kierunek ma sens tylko dla prognoz, które go zakładały (środek różni się od ceny o > 0,5%)
+    # direction only makes sense for forecasts that assumed one (the middle differs from the price by > 0.5%)
     dirs = d[(d["p50"] / d["price0"] - 1).abs() > 0.005]
     sign_ok = np.sign(dirs["p50"] - dirs["price0"]) == np.sign(dirs["actual"] - dirs["price0"])
     out = {"n": int(len(d)), "coverage80": float(d["in_band"].mean()),
            "mape": float(d["err_pct"].abs().mean()),
            "direction": float(sign_ok.mean()) if len(dirs) >= 5 else None, "direction_n": int(len(dirs)), "by_h": {},
            "first": str(log["made_on"].min())[:10]}
-    # wynik Briera dla „szansy wzrostu” (0 = idealnie, 0,25 = rzut monetą); liczony tylko dla prognoz, które ją zapisały
+    # Brier score for the "chance of a rise" (0 = perfect, 0.25 = coin toss); computed only for forecasts that recorded it
     if "prob_up" in d and d["prob_up"].notna().sum() >= 5:
         b = d.dropna(subset=["prob_up"])
         up = (b["actual"] > b["price0"]).astype(float)

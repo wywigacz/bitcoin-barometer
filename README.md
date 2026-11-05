@@ -1,67 +1,135 @@
-# BTC Predictor
+# Bitcoin Barometer: an honest, self-testing Bitcoin forecast
 
-System prognozowania **rozkładu** ceny Bitcoina (nie jednej liczby) z uczciwą weryfikacją na historii.
-Panel na żywo: https://wywigacz.github.io/bitcoin-predictor/ (aktualizuje się sam co 6 godzin przez GitHub Actions).
+**Live dashboard: [wywigacz.github.io/bitcoin-predictor](https://wywigacz.github.io/bitcoin-predictor/)**: refreshed automatically every 6 hours.
 
-## Uruchomienie lokalne
+[![Update forecasts](https://github.com/wywigacz/bitcoin-predictor/actions/workflows/update.yml/badge.svg)](https://github.com/wywigacz/bitcoin-predictor/actions/workflows/update.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![No API keys](https://img.shields.io/badge/API%20keys-none-success)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-```
-python run.py            # aktualizacja przyrostowa + analiza + panel (docs/index.html)
-python run.py --full     # pełne pobranie historii od zera
-```
+[![Bitcoin Barometer dashboard](docs/preview.png)](https://wywigacz.github.io/bitcoin-predictor/)
 
-Wymaga: pandas, numpy, scipy, scikit-learn, requests (`pip install -r requirements.txt`). Bez kluczy API.
+Most Bitcoin "price predictions" give you one confident number. The Bitcoin Barometer does the opposite: it forecasts the
+**whole range of likely prices** (7 to 180 days ahead), explains it in plain English like a weather report, and keeps
+**testing itself in public** so you can see exactly how far to trust it.
 
-## Co robi
+It is a one-person research project in quantitative finance, time-series forecasting and forecast evaluation, built
+with free public data only and run entirely on GitHub Actions.
 
-| Moduł | Zadanie |
+## What makes it different
+
+- **Probabilistic, not point forecasts.** Quantile bands (P10 to P90) for 7, 30, 90 and 180 days, the chance of touching
+  key price levels, and the chance of a calm or stormy week.
+- **Pre-registered hypotheses.** 21 ideas (ETF flows, whale wallets, leverage, options skew, Wikipedia attention, news tone...)
+  were written down *before* looking at results, with Bonferroni correction and a split-half stability check.
+- **A 2-year holdout exam.** Models are chosen only on data before Oct 29, 2024 and must then beat a "no change" benchmark
+  on the unseen last two years (Diebold-Mariano test with HAC and Harvey-Leybourne-Newbold corrections).
+- **Hundreds of data sources, zero API keys.** On-chain metrics, Deribit options, Binance leverage and 5-minute candles,
+  CFTC positioning, macro and liquidity data, ~250 global market series, Wikipedia attention in 12 languages, GDELT news tone.
+- **An external judge.** Our touch probabilities are scored against real-money prediction markets (Polymarket, Kalshi).
+- **A virtual trader with a public journal.** Every ~6 hours it decides to buy, sell or wait with a virtual 10,000 PLN
+  (+10,000 PLN a month) and writes down what it sees, what it does and when it would change its mind:
+  [read the trader journal](https://wywigacz.github.io/bitcoin-predictor/journal.html).
+- **Append-only forecast ledger.** Every forecast is logged with the commit hash and scored once its horizon passes.
+
+## Key findings so far
+
+Honest results matter more than impressive ones:
+
+| Question | Result |
 |---|---|
-| `sources.py` | cena, on-chain (MVRV), górnicy, nastroje, makro, stablecoiny, funding, Deribit (DVOL, put/call), CFTC, Upbit (kimchi), Wikipedia w 11 językach |
-| `world.py` | ~250 szeregów ze świata: giełdy i waluty 20+ krajów, towary i energia (gaz TTF, węgiel, benzyna), spółki wydobywcze BTC, uwaga na Wikipedii (~130 haseł: ludzie, instytucje, bańki, klimat, technologie), pogoda w regionach kopania, plamy słoneczne, trzęsienia ziemi, księżyc, kalendarz i „dzikie karty” (retrogradacja Merkurego liczona z orbit Keplera, piątek 13., mundial/igrzyska/Super Bowl, ramadan, Złoty Tydzień, Święto Dziękczynienia, zmiana czasu) |
-| `extra.py` | płynność dolara (NY Fed: reverse repo, SOFR, EFFR, SOMA; Skarb USA: TGA; płynność netto), pozycje funduszy w CFTC na S&P, Nasdaq, 10-latkach, jenie, euro, VIX, złocie i ropie, DefiLlama (TVL, DEX, USDT, USDC), Lightning (mempool.space), CoinMetrics (BTC na giełdach, napływy), pogoda kosmiczna GFZ (Kp, Ap, F10.7), Hacker News (miesięczne wzmianki, przesunięte o miesiąc, by nie podglądać przyszłości) |
-| `whales.py` | duzi gracze: dzienne przepływy do ETF na bitcoina (TFTC, CC BY 4.0), transakcje Strategy (Bitbo, zmiana liczona z różnic stanu), stawka finansowania Hyperliquid oraz zdjęcia pozycji 150 najlepszych i 150 najgorszych traderów Hyperliquid co 6 godzin (`data/hl_snapshots.csv`, nagrywane od 2026-10-29); salda portfeli państw z mempool.space: USA (adres Silk Road), Niemcy (7 adresów BKA, suma 49 859 BTC zgodna z raportami), Salwador (oficjalna lista adresów z bitcoin.gob.sv); historia transakcji w `data/entities_cache.json` |
-| `touch.py` | szansa dotknięcia poziomów ceny w 7/30/90 dni (po maksimach i minimach dnia, jeśli ta definicja zdała egzamin; inaczej po zamknięciach): symulacja 20 000 ścieżek z całych historycznych dni (zamknięcie, maksimum, minimum, standaryzowane); 4 warianty (powrót zmienności do normy, FHS z GJR-GARCH, dryf z 4 lat, oba) porównywane testem wstecz od 2016 vs historyczna częstość liczona tylko z przeszłości (Brier z rozkładem na niezawodność i rozdzielczość); do panelu idzie najlepszy |
-| `sim.py` | wirtualny, aktywnie zarządzany portfel (10 000 zł + 10 000 zł co miesiąc): codzienna decyzja o udziale BTC z 3 strategii (regularne, kontrola zmienności, trend 28 dni) ważonych algorytmem Hedge na ostatnich 365 dniach; pasmo 5 pkt proc., prowizja 0,2%; dziennik na żywo tylko dopisywany (`data/sim_live.csv`, od 2026-10-28); test na historii od 2018 i egzamin od 2024-10-29 vs regularne kupowanie ; `sim.taxed`: wynik po polskim podatku (19% od rocznego dochodu z kryptowalut, koszty kasowo z przeniesieniem nadwyżki, płatność 30 kwietnia) i z odsetkami od gotówki (stopa NBP z BIS minus 1 pkt proc., po podatku Belki; `data/nbp_rate.csv`) |
-| egzamin 2-letni | `ensemble.holdout`, `touch.calibrate`, `sim.run`: wybór metody/wariantu tylko na danych sprzed 2024-10-29, jeden sprawdzian na ostatnich 2 latach; do prognozy wchodzi tylko zwycięzca, który zdał egzamin (bije „bez zmian”, DM p < 0,10) |
-| dziennik metod | `store.update_ledger`: od 2026-10-30 codziennie kwantyle każdej metody na każdy horyzont (`data/ledger.csv`), z numerem commitu, tylko dopisywany; po terminie dopisywany wynik (pokrycie 80%, pinball); `forecast_log.csv` też tylko dopisywany |
-| wielkość testów | `ensemble._step`: horyzonty 1/3/7 dni sprawdzane co dzień (od 2026-10-30), dłuższe co tydzień; `_dm` z poprawką Harveya–Leybourne’a–Newbolda; `_mde` = najmniejsza wykrywalna przewaga; egzamin „nierozstrzygnięty” przy < 20 niezależnych obserwacjach; `confirm.health` = monitor i reguła emerytury dla potwierdzonych sygnałów, H14 = H7 tylko na danych po 2026-10-30 |
-| `lev.py` | dźwignia z archiwum Binance (data.binance.vision, bez klucza): otwarte pozycje i stosunki długich/krótkich (od 2020-09), premia kontraktu wieczystego i stawka za lewar (od 2020-01); `data/lev.csv`; hipotezy H15–H17 (ryzyko spadku o 10% w 30 dni) |
-| `opthist.py` | historia opcji Deribit odtworzona z archiwum transakcji (history.deribit.com, od 2018): asymetria 25-delta, zmienność przy cenie, stosunek put/call; 3 próbki po 1000 transakcji dziennie; `data/opt_hist.csv`; zasila H13 |
-| `judge.py` | sędzia z rynków zakładów: rozstrzygnięte miesięczne rynki dotknięcia na Polymarket (od 2024, `data/poly_markets.csv`; przy blokadzie DNS przez DNS Google i curl) kontra nasz model z danych z tego samego dnia; dziennik Kalshi na żywo (`data/judge_live.csv`) |
-| `volev.py` | „spokojnie czy burzliwie”: szansa burzliwego tygodnia (zmienność 7 dni powyżej rocznej mediany), dnia z ruchem ≥5% w 7 dni i ≥10% w 30 dni; regresja logistyczna na prognozie zmienności, walk-forward co tydzień od 2015, porównanie ze stałą częstością i z „jak ostatnio”; przewaga potwierdzona tylko, gdy bije „jak ostatnio” przed i po 2024-10-29 |
-| skalowanie pasm | `ensemble.horizon_sigma` / `scale_test`: zmienność na H dni wracająca do normy z 2 lat (trwałość z GJR-GARCH) zamiast σ·√H; włączana per horyzont tylko, gdy rozkład bazowy wypada lepiej przed 2024-10-29 (DM p < 0,10) i na egzaminie; audyt pokrycia pasm w tercylach zmienności |
-| `rv.py` | zrealizowana zmienność z 5-minutowych świec Binance BTCUSDT (data.binance.vision, od 2017-09): RV, semiwariancje, bipower, skoki; `data/rv_daily.csv`. W `ensemble.vol_models` kandydaci HAR-RV i HAR z semiwariancją i skokami, oceniani na odłożonych 30% danych (QLIKE); używani tylko, jeśli tam poprawiają prognozę ; od 2026-10-31 także kwartyczność RQ i `ensemble.rv_race`: HAR-RV i HARQ (prognoza wprost na 1/3/7 dni, przeuczane co rok) kontra obecna skala, sędzia = pinball końcowych pasm, przyjęcie tylko przy DM p < 0,10 przed 2024-10-29 i przewadze po tej dacie |
-| `confirm.py` | osobny test potwierdzający hipotez spisanych z góry 2026-10-29: partia 1 (H1–H6, duzi gracze, Bonferroni 0,05/6) i partia 2 (H7–H10, trend 1–4 tygodni, uwaga, połączenie sygnałów, 0,05/4); Spearman, n/horyzont, jednostronnie, zgodny znak w obu połowach; potwierdzone sygnały tworzą metodę „conf” w zespole (ta sama bramka istotności co reszta) ; partia 6 (H18–H21, 2026-10-31) to regresory zmienności: cel = log(zrealizowana wariancja 7 dni / EWMA), skok uwagi na Wikipedii, przepływy giełdowe względem zapasu (Coin Metrics), ton newsów GDELT (`extra.gdelt_tone`), udział opłat w przychodach górników |
-| `trader.py` | wirtualny trader od 2026-10-31: przejmuje portfel z `sim.py` i przy każdej aktualizacji w chmurze (co ok. 6 godzin) decyduje po bieżącej cenie (Bitstamp, kurs NBP): kup, sprzedaj lub czekaj i za ile; te same strategie i Hedge, trend z bieżącej ceny, pasmo 5 pkt proc.; dziennik tylko dopisywany (`data/trader_log.csv`) z wpisami „co widzę / co robię i dlaczego / kiedy zmienię zdanie”, strona `docs/dziennik.html`, rozliczenie każdej transakcji po 1 i 7 dniach; lokalnie zapisuje tylko z `BTC_TRADER=1` |
-| `dirtrack.py` | osobny tor kierunku: szansa wzrostu w 7 dni z regresji logistycznej na potwierdzonych sygnałach, przeuczanej co tydzień; Brier vs stała częstość wzrostów (DM z HLN), zastępuje 50% tylko przy p < 0,10 przed i po 2024-10-29 |
-| `store.py` | strażnik danych: usuwa wartości niemożliwe (np. cena Coinbase poza 0,8–1,25 ceny Bitstamp, DVOL poza 10–400), po naprawie pomieszanych kolumn w październiku 2026 |
-| `events.py`, `events_data.py` | baza wydarzeń: ręczne, kalendarz (FOMC, opcje), włamania (DefiLlama), automatycznie wykrywane szoki rynkowe; atrybucja ruchów i event study |
-| `worldlog.py` | dziennik świata: co działo się każdego dnia od 2011 (Wikipedia Current events), podział na kategorie i ~20 grup słów kluczowych (wojna, banki, sankcje, wybory, klęski, krypto...) -> szeregi dla skanera |
-| `news.py` | nagłówki prasowe o Bitcoinie z dni dużych ruchów (GDELT, z pamięcią podręczną i cierpliwym tempem zapytań) |
-| `model.py` | 15 sygnałów (MVRV, 200W, Puell, makro...) -> wskaźnik złożony |
-| `regularity.py` | Hurst (DFA), entropia permutacyjna, iloraz wariancji, grupowanie zmienności, indeks Hilla, EVT (GPD), łańcuch Markowa, filtr Kalmana, periodogram |
-| `scan.py` | skaner setek hipotez z korektą na wielokrotne testy (FDR) + stabilność + test poza próbą |
-| `ensemble.py` | zmienność (EWMA + GJR-GARCH + HAR), HMM, power law; modele: naive, wskaźnik złożony, ridge, analogi kNN, boosting kwantylowy, skaner świata; zespół z bramką istotności |
-| `report.py`, `template_*.html`, `chart.js` | panel HTML (jeden plik), w tym interaktywny symulator regularnych wpłat (historia + scenariusze; edukacyjny, bez porad i bez transakcji) |
+| Can we predict the **direction** of Bitcoin's price? | No reliable edge. Of 14 pre-registered direction hypotheses only weak momentum passed, and it adds nothing out of sample; a dedicated direction track also failed, so the dashboard says 50/50. |
+| Can we predict **how volatile** the next week will be? | Yes. Volatility-event forecasts beat the "same as last time" benchmark both before and after the holdout cut-off. |
+| Do volatility-aware bands help? | Yes at 7, 30 and 90 days: mean-reverting volatility scaling beat the square-root-of-time rule. |
+| Who predicts price **touches** better, us or the market? | The market. Polymarket's Brier score is 0.131 vs our 0.160 over the last two years. |
+| Does active allocation beat regular buying (DCA)? | Not convincingly. It wins in about half of all 2-year windows; the 90% confidence interval includes zero. |
 
-## Zasady rzetelności
+The full research roadmap and its outcomes are in [PLAN.md](PLAN.md).
 
-- **Walk-forward**: każdy model uczy się wyłącznie na danych znanych w danym dniu; selekcja cech skanera odbywa się wewnątrz walk-forward.
-- **Benchmark „bez zmian”** jest kalibrowany tak samo jak modele; porównanie w pinball loss, test Diebolda-Mariano.
-- **Bramka istotności**: model wchodzi do prognozy dopiero przy p ≤ 0,10 (pełna waga p ≤ 0,03). Dziś żaden jej nie przechodzi, więc środek prognozy = cena bieżąca, a pasmo wynika ze zmienności.
-- **Kalibracja pasma**: ~80% wyników ma mieścić się w P10-P90 (kontrolowane w teście).
-- Audyt: losowe cechy i potasowany cel nie dają przewagi, a celowy wyciek przyszłości daje +34% (potok wykrywa prawdziwy sygnał).
-- Dziennik prognoz (`data/forecast_log.csv`) porównuje każdą prognozę z realną ceną po upływie horyzontu.
+## Tech stack
 
-## Ograniczenia
+Python (pandas, NumPy, SciPy, scikit-learn), GARCH / HAR / HARQ volatility models, hidden Markov models, quantile
+gradient boosting, ridge regression, kNN analogues, walk-forward validation, pinball loss and Brier scores,
+Monte Carlo path simulation, a static HTML dashboard with inline SVG and Chart.js, and GitHub Actions + GitHub Pages
+for fully automated, serverless operation.
 
-- Znane słabości: parametry GARCH/HAR i wagi mieszanki zmienności dobrane na całej próbie (łagodny wyciek, wpływ na skalę, nie kierunek); progi sygnałów pochodzą z opracowań.
-- Brak darmowych źródeł: przepływy do ETF, Google Trends, globalne M2 (FRED bywa niedostępny, sygnał jest wtedy pomijany).
-- Cykle halvingowe to 4 obserwacje. To nie jest rekomendacja inwestycyjna.
-
-## Harmonogram lokalny (opcjonalnie)
+## Local run
 
 ```
-python run.py --install-schedule   # zadanie Windows co 6 godzin
+python run.py            # incremental update + analysis + dashboard (docs/index.html)
+python run.py --full     # full history download from scratch
+```
+
+Requires: pandas, numpy, scipy, scikit-learn, requests (`pip install -r requirements.txt`). No API keys.
+
+## Architecture: what each module does
+
+| Module | Task |
+|---|---|
+| `sources.py` | price, on-chain (MVRV), miners, sentiment, macro, stablecoins, funding, Deribit (DVOL, put/call), CFTC, Upbit (kimchi), Wikipedia in 11 languages |
+| `world.py` | about 250 global series: exchanges and currencies of 20+ countries, commodities and energy (TTF gas, coal, gasoline), BTC mining companies, Wikipedia attention (about 130 topics: people, institutions, bubbles, climate, technologies), weather in mining regions, sunspots, earthquakes, the moon, calendar and "wild cards" (Mercury retrograde calculated from Kepler orbits, Friday the 13th, World Cup/Olympics/Super Bowl, Ramadan, Golden Week, Thanksgiving, daylight saving time) |
+| `extra.py` | dollar liquidity (NY Fed: reverse repo, SOFR, EFFR, SOMA; US Treasury: TGA; net liquidity), CFTC fund positions in S&P, Nasdaq, 10-year Treasuries, yen, euro, VIX, gold and oil, DefiLlama (TVL, DEX, USDT, USDC), Lightning (mempool.space), CoinMetrics (BTC on exchanges, inflows), GFZ space weather (Kp, Ap, F10.7), Hacker News (monthly mentions, shifted by one month so as not to peek at the future) |
+| `whales.py` | large players: daily flows into Bitcoin ETFs (TFTC, CC BY 4.0), Strategy transactions (Bitbo, change calculated from balance differences), Hyperliquid funding rate and position snapshots of the 150 best and 150 worst Hyperliquid traders every 6 hours (`data/hl_snapshots.csv`, recorded since Oct 29, 2026); country wallet balances from mempool.space: USA (Silk Road address), Germany (7 BKA addresses, total 49,859 BTC consistent with reports), El Salvador (official address list from bitcoin.gob.sv); transaction history in `data/entities_cache.json` |
+| `touch.py` | chance of touching price levels in 7/30/90 days (based on daily highs and lows if that definition passed the test; otherwise based on closes): simulation of 20,000 paths from full historical days (close, high, low, standardized); 4 variants (volatility mean reversion, FHS with GJR-GARCH, 4-year drift, both) compared by a backtest from 2016 vs historical frequency computed only from the past (Brier score split into reliability and resolution); the best one goes to the dashboard |
+| `sim.py` | virtual, actively managed portfolio (10,000 PLN + 10,000 PLN every month): daily decision on BTC allocation from 3 strategies (regular, volatility control, 28-day trend) weighted by the Hedge algorithm over the last 365 days; 5 percentage point band, 0.2% fee; append-only live journal (`data/sim_live.csv`, from Oct 28, 2026); historical test from 2018 and exam from Oct 29, 2024 vs regular buying; `sim.taxed`: result after Polish tax (19% on annual crypto income, costs on a cash basis with excess carryforward, payment on Apr 30) and with interest on cash (NBP rate from BIS minus 1 percentage point, after Belka tax; `data/nbp_rate.csv`) |
+| 2-year exam | `ensemble.holdout`, `touch.calibrate`, `sim.run`: method/variant selection only on data before Oct 29, 2024, one test on the last 2 years; only the winner that passed the exam enters the forecast (beats "no change", DM p < 0.10) |
+| method journal | `store.update_ledger`: from Oct 30, 2026 daily quantiles of each method for each horizon (`data/ledger.csv`), with commit number, append-only; after the deadline the result is appended (80% coverage, pinball); `forecast_log.csv` is also append-only |
+| test scope | `ensemble._step`: horizons 1/3/7 days checked daily (from Oct 30, 2026), longer horizons weekly; `_dm` with the Harvey-Leybourne-Newbold correction; `_mde` = minimum detectable edge; exam "inconclusive" at < 20 independent observations; `confirm.health` = monitor and retirement rule for confirmed signals, H14 = H7 only on data after Oct 30, 2026 |
+| `lev.py` | leverage from the Binance archive (data.binance.vision, no key): open interest and long/short ratios (from Sep 2020), perpetual contract premium and funding rate (from Jan 2020); `data/lev.csv`; hypotheses H15-H17 (risk of a 10% drop in 30 days) |
+| `opthist.py` | Deribit options history reconstructed from the trade archive (history.deribit.com, from 2018): 25-delta skew, at-the-money volatility, put/call ratio; 3 samples of 1,000 trades per day; `data/opt_hist.csv`; feeds H13 |
+| `judge.py` | judge from prediction markets: resolved monthly touch markets on Polymarket (from 2024, `data/poly_markets.csv`; when DNS is blocked via Google DNS and curl) versus our model using data from the same day; live Kalshi journal (`data/judge_live.csv`) |
+| `volev.py` | "calm or stormy": chance of a stormy week (7-day volatility above the yearly median), a day with a move ≥5% within 7 days and ≥10% within 30 days; logistic regression on the volatility forecast, walk-forward weekly from 2015, compared with a constant frequency and with "like recently"; the edge is confirmed only if it beats "like recently" before and after Oct 29, 2024 |
+| band scaling | `ensemble.horizon_sigma` / `scale_test`: volatility over H days mean-reverting to the 2-year norm (persistence from GJR-GARCH) instead of σ·√H; enabled per horizon only when the baseline distribution does better before Oct 29, 2024 (DM p < 0.10) and in the exam; band coverage audit across volatility terciles |
+| `rv.py` | realized volatility from 5-minute Binance BTCUSDT candles (data.binance.vision, from Sep 2017): RV, semivariances, bipower, jumps; `data/rv_daily.csv`. In `ensemble.vol_models`, candidates HAR-RV and HAR with semivariance and jumps, evaluated on held-out 30% of data (QLIKE); used only if they improve the forecast there; from Oct 31, 2026 also realized quarticity RQ and `ensemble.rv_race`: HAR-RV and HARQ (forecast directly for 1/3/7 days, retrained yearly) versus the current scale, judge = pinball of final bands, accepted only at DM p < 0.10 before Oct 29, 2024 and with an edge after that date |
+| `confirm.py` | separate confirmation test for hypotheses written in advance on Oct 29, 2026: batch 1 (H1-H6, large players, Bonferroni 0.05/6) and batch 2 (H7-H10, 1 to 4 week trend, attention, signal combination, 0.05/4); Spearman, n/horizon, one-sided, consistent sign in both halves; confirmed signals form the "conf" method in the ensemble (same significance gate as the rest); batch 6 (H18-H21, Oct 31, 2026) covers volatility regressors: target = log(realized 7-day variance / EWMA), Wikipedia attention jump, exchange flows relative to stock (Coin Metrics), GDELT news tone (`extra.gdelt_tone`), fee share of miner revenue |
+| `trader.py` | virtual trader from Oct 31, 2026: takes over the portfolio from `sim.py` and on every cloud update (about every 6 hours) decides at the current price (Bitstamp, NBP rate): buy, sell or wait, and for how much; the same strategies and Hedge, trend from the current price, 5 percentage point band; append-only journal (`data/trader_log.csv`) with entries "what I see / what I do and why / when I will change my mind", page `docs/journal.html`, settlement of each trade after 1 and 7 days; saves locally only with `BTC_TRADER=1` |
+| `dirtrack.py` | separate direction track: chance of a rise in 7 days from logistic regression on confirmed signals, retrained weekly; Brier versus a constant frequency of rises (DM with HLN), replaces 50% only at p < 0.10 before and after Oct 29, 2024 |
+| `store.py` | data guard: removes impossible values (for example Coinbase price outside 0.8 to 1.25 of Bitstamp price, DVOL outside 10 to 400), after fixing mixed-up columns in Oct 2026 |
+| `events.py`, `events_data.py` | event database: manual, calendar (FOMC, options), hacks (DefiLlama), automatically detected market shocks; move attribution and event study |
+| `worldlog.py` | world journal: what happened each day since 2011 (Wikipedia Current events), split into categories and about 20 keyword groups (war, banks, sanctions, elections, disasters, crypto...) -> series for the scanner |
+| `news.py` | news headlines about Bitcoin from days with large moves (GDELT, with cache and patient request rate) |
+| `model.py` | 15 signals (MVRV, 200W, Puell, macro...) -> composite indicator |
+| `regularity.py` | Hurst (DFA), permutation entropy, variance ratio, volatility clustering, Hill index, EVT (GPD), Markov chain, Kalman filter, periodogram |
+| `scan.py` | scanner of hundreds of hypotheses with multiple-testing correction (FDR) + stability + out-of-sample test |
+| `ensemble.py` | volatility (EWMA + GJR-GARCH + HAR), HMM, power law; models: naive, composite indicator, ridge, kNN analogs, quantile boosting, world scanner; ensemble with a significance gate |
+| `report.py`, `template_*.html`, `chart.js` | HTML dashboard (one file), including an interactive regular-deposit simulator (history + scenarios; educational, no advice and no transactions) |
+
+## Reliability rules
+
+- **Walk-forward**: every model learns only on data known on that day; scanner feature selection happens inside walk-forward.
+- **Benchmark "no change"** is calibrated the same way as the models; comparison in pinball loss, Diebold-Mariano test.
+- **Significance gate**: a model enters the forecast only at p ≤ 0.10 (full weight at p ≤ 0.03). Today none pass it, so the center of the forecast = current price, and the band comes from volatility.
+- **Band calibration**: ~80% of outcomes should fall within P10-P90 (checked in the test).
+- Audit: random features and a shuffled target give no edge, while a deliberate future leak gives +34% (the pipeline detects a real signal).
+- Forecast log (`data/forecast_log.csv`) compares each forecast with the actual price after the horizon passes.
+
+## Limitations
+
+- Known weaknesses: GARCH/HAR parameters and volatility mixture weights chosen on the full sample (mild leakage, affects scale, not direction); signal thresholds come from published studies.
+- Missing free sources: ETF flows, Google Trends, global M2 (FRED is sometimes unavailable, then the signal is skipped).
+- Halving cycles are only 4 observations.
+
+## Local schedule (optional)
+
+```
+python run.py --install-schedule   # Windows task every 6 hours
 python run.py --remove-schedule
 ```
+
+## About the author
+
+Built by **Przemysław Wywigacz** ([@wywigacz](https://github.com/wywigacz)), founder of **Life Automation**, working at
+the intersection of automation, data and AI-assisted engineering. This project is a public, end-to-end example of how I
+approach forecasting problems: collect broad free data, state hypotheses up front, validate out of sample, and report
+negative results as clearly as positive ones.
+
+If you find it useful, a star on the repository helps others find it. Ideas, issues and pull requests are welcome.
+
+## Disclaimer
+
+This is an educational research project. Nothing here is investment advice, and the trading portfolio is purely
+virtual: no real money and no real orders are involved.
+
+## License
+
+[MIT](LICENSE) © 2026 Przemysław Wywigacz

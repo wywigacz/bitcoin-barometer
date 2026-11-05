@@ -1,13 +1,22 @@
 <!doctype html>
-<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Barometr Bitcoina</title>
-<meta name="description" content="Prognoza ceny Bitcoina jako biuletyn pogodowy: zakresy, scenariusze i uczciwy test, na ile można im ufać.">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bitcoin Barometer: Bitcoin price forecast with honest, self-testing models</title>
+<meta name="description" content="Bitcoin price forecast for 7 to 180 days as a range of likely prices, updated every 6 hours, with a 2-year holdout test, pre-registered hypotheses and a public virtual-trader journal. Free, open source.">
+<meta name="author" content="Przemysław Wywigacz">
+<meta name="keywords" content="Bitcoin price forecast, BTC price prediction, Bitcoin volatility, probabilistic forecast, quantile forecast, crypto analytics, backtesting, open source">
+<link rel="canonical" href="https://wywigacz.github.io/bitcoin-predictor/">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Bitcoin Barometer">
+<meta property="og:title" content="Bitcoin Barometer: an honest, self-testing Bitcoin forecast">
+<meta property="og:description" content="Bitcoin price forecast for 7 to 180 days as a range of likely prices, updated every 6 hours, with a 2-year holdout test, pre-registered hypotheses and a public virtual-trader journal. Free, open source.">
+<meta property="og:url" content="https://wywigacz.github.io/bitcoin-predictor/"><meta property="og:image" content="https://wywigacz.github.io/bitcoin-predictor/preview.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://wywigacz.github.io/bitcoin-predictor/preview.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Bitcoin Barometer","url":"https://wywigacz.github.io/bitcoin-predictor/","applicationCategory":"FinanceApplication","operatingSystem":"Web","isAccessibleForFree":true,"description":"Probabilistic Bitcoin price forecast with public out-of-sample testing and a virtual trader journal.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Przemysław Wywigacz","url":"https://github.com/wywigacz","worksFor":{"@type":"Organization","name":"Life Automation"}},"codeRepository":"https://github.com/wywigacz/bitcoin-predictor","license":"https://opensource.org/licenses/MIT"}</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230b161c'/%3E%3Cpath d='M6 21a10 10 0 1 1 20 0' fill='none' stroke='%23ffb347' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M16 21l5-8' stroke='%234fd8b0' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-/* Koncepcja: biuletyn pogodowy dla ceny. Barometr (tani/drogi), stożek niepewności, izobary w tle.
-   Układ: wąski nagłówek sekcji + szeroka treść; karty tylko dla głównych obiektów. */
+/* Concept: a weather report for the price. Barometer (cheap/expensive), cone of uncertainty, isobars in the background.
+   Layout: narrow section header + wide content; cards only for the main objects. */
 :root{
   --bg:#0a151b;--bg2:#0e1d25;--card:#102530;--card2:#14303d;--track:#1a3643;
   --line:rgba(180,222,232,.10);--line2:rgba(180,222,232,.20);
@@ -35,7 +44,7 @@ h1,h2,h3{font-family:var(--f-display);margin:0;font-weight:700;letter-spacing:-.
 .sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .dateline .chip{white-space:normal}.muted{color:var(--muted)}.sm{font-size:12.5px}.pos{color:var(--green)}.neg{color:var(--red)}.mono{font-family:var(--f-mono)}
 .eyebrow{font:600 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
-/* pasek górny */
+/* top bar */
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px)));padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
   background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(14px) saturate(1.3);border-bottom:1px solid var(--line)}
 .bar-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:16px}
@@ -66,13 +75,13 @@ h1,h2,h3{font-family:var(--f-display);margin:0;font-weight:700;letter-spacing:-.
 @keyframes sweep{from{transform:rotate(-120deg)}to{transform:rotate(var(--rot))}}
 .baro-cap{margin-top:-6px;font:500 15px/1.4 var(--f-display);max-width:28ch;color:var(--fg)}
 .baro-cap span{display:block;color:var(--muted);font:500 12px var(--f-mono);margin-top:4px}
-/* sekcje */
+/* sections */
 section.s{padding-top:72px}
 .sh{max-width:760px;margin-bottom:28px}.sh h2{font-size:clamp(28px,4.4vw,46px);line-height:1.05;margin:12px 0 12px}.lede{color:var(--muted);font-size:16.5px;line-height:1.6;margin:0}
 .panel,.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:var(--shadow);min-width:0;overflow-x:auto}
 .card.empty{padding:20px 22px}
 .open{padding:0}
-/* podsumowanie */
+/* summary */
 .brief{display:grid;grid-template-columns:minmax(0,1fr);gap:22px}
 .brief ul{margin:0;padding:0;list-style:none;display:grid;gap:14px}
 .brief li{display:grid;grid-template-columns:34px 1fr;gap:14px;font-size:16.5px;line-height:1.55}
@@ -93,7 +102,7 @@ section.s{padding-top:72px}
 .ft .foot{display:flex;justify-content:space-between;font:500 12px var(--f-mono);color:var(--muted)}
 .ft .why{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.45}
 .badge{font:600 10.5px var(--f-mono);letter-spacing:.04em;padding:3px 9px;border-radius:99px;background:var(--track);color:var(--muted);white-space:normal;display:inline-block}.badge.on{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green)}
-/* suwak scenariuszy */
+/* scenario slider */
 .scen{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.5fr);gap:26px;align-items:center}
 .readout .big{font:800 clamp(34px,5vw,58px)/1 var(--f-display);letter-spacing:-.035em;margin:10px 0 4px}.readout .big small{font:500 15px var(--f-mono);color:var(--muted);letter-spacing:0}
 .kv2{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;margin-top:16px;font-size:14.5px}.kv2 dt{color:var(--muted)}.kv2 dd{margin:0;font:600 14.5px var(--f-mono);text-align:right}
@@ -103,7 +112,7 @@ section.s{padding-top:72px}
 #hz::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--fg);border:5px solid var(--accent);cursor:grab;box-shadow:0 4px 14px rgba(0,0,0,.4)}
 #hz::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--fg);border:5px solid var(--accent);cursor:grab}
 .dens svg{display:block;width:100%;height:auto;overflow:visible}.dens text{fill:var(--muted);font:500 11px var(--f-mono)}
-/* wykres */
+/* chart */
 .chart-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .legend{display:flex;gap:16px;flex-wrap:wrap;font:500 12px var(--f-body);color:var(--muted);align-items:center}.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
 .evt{display:inline-flex;align-items:center;gap:6px;cursor:pointer}.evt input{accent-color:var(--accent)}
@@ -114,7 +123,7 @@ section.s{padding-top:72px}
 .tip b{display:block;font:600 13px var(--f-body);margin-bottom:5px}.tip div{display:flex;justify-content:space-between;gap:16px;color:var(--muted)}.tip div span:last-child{color:var(--fg);font-family:var(--f-mono)}
 .ax{fill:var(--muted);font:500 11px var(--f-mono)}.gridl{stroke:var(--line)}.hv{stroke:var(--line2);stroke-dasharray:3 4}.hvl{fill:var(--faint);font:500 10.5px var(--f-mono)}
 .legend2{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted);align-items:center}.legend2 i{display:inline-block;vertical-align:middle;margin-right:6px}
-/* cykl */
+/* cycle */
 .cycle{margin-top:6px}.zones{position:relative;display:flex;gap:3px;height:32px}
 .zone{background:color-mix(in srgb,var(--c) 20%,var(--track));border-radius:7px;display:grid;place-items:center;font:600 10.5px var(--f-mono);color:var(--fg);overflow:hidden;white-space:nowrap;border-top:2px solid var(--c)}
 .zone span{opacity:.85;padding:0 4px}
@@ -122,10 +131,10 @@ section.s{padding-top:72px}
 .cyc-foot{margin-top:12px;font-size:13px;color:var(--muted)}.cyc-foot b{color:var(--fg)}
 .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
 .fact{border-top:1px solid var(--line2);padding-top:12px}.fact span{display:block;font:500 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.fact b{font:700 24px var(--f-display);letter-spacing:-.02em}
-/* uzasadnienia */
+/* reasons */
 .cols2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .why{padding:22px}.why h3,.ct{font-size:19px;margin-bottom:12px}.why ul{margin:0 0 10px;padding-left:18px;font-size:14.5px}.why li{margin:6px 0}.why p{margin:6px 0;font-size:14.5px}
-/* tabele */
+/* tables */
 .tw{overflow-x:auto}.tbl{border-collapse:collapse;width:100%;font-size:13.5px}
 .tbl th{color:var(--muted);font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
 .tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}.tbl tr:last-child td{border-bottom:0}.tbl tbody tr:hover td{background:color-mix(in srgb,var(--fg) 3%,transparent)}
@@ -134,7 +143,7 @@ section.s{padding-top:72px}
 .dv span{position:absolute;top:0;bottom:0;border-radius:5px}.dv span.g{background:linear-gradient(90deg,color-mix(in srgb,var(--green) 45%,transparent),var(--green))}.dv span.r{background:linear-gradient(270deg,color-mix(in srgb,var(--red) 45%,transparent),var(--red))}
 .cause{display:inline-block;font-size:11.5px;padding:3px 9px;border-radius:99px;margin:2px 4px 2px 0;background:var(--track);cursor:default}
 .cause.curated{background:color-mix(in srgb,var(--accent) 22%,var(--track))}.cause.auto{background:color-mix(in srgb,var(--blue) 20%,var(--track))}.cause.calendar{opacity:.85}
-/* wskaźniki */
+/* indicators */
 details.grp{border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,var(--card2),var(--card));margin-bottom:12px;overflow:hidden}
 details.grp>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:14px;padding:18px 22px}.grp>summary::-webkit-details-marker{display:none}
 .grp>summary .gt{flex:1;min-width:0}.grp>summary h3{font-size:18px}.grp>summary p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
@@ -147,7 +156,7 @@ details[open].grp>summary::after{transform:rotate(-135deg)}.grp .rows{padding:0 
 .scale.na{background:var(--track);opacity:.5}.s-val{text-align:right}.s-val b{display:block;font:600 14.5px var(--f-mono)}.s-val span{font-size:12px;color:var(--muted)}
 .scalelab{display:flex;justify-content:space-between;font:500 10.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:0 22px 12px}
 .gchip{font:600 11px var(--f-mono);padding:4px 10px;border-radius:99px;background:var(--track);white-space:nowrap}.gchip.g{color:var(--green)}.gchip.r{color:var(--red)}
-/* kafle ogólne */
+/* general tiles */
 .tiles3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .tile{display:flex;flex-direction:column;gap:3px;padding:18px 20px;border:1px solid var(--line2);border-radius:18px;background:color-mix(in srgb,var(--bg2) 50%,transparent)}
 .tile b{font:700 clamp(24px,3vw,32px)/1.15 var(--f-display);letter-spacing:-.02em}
@@ -173,7 +182,7 @@ footer{margin-top:28px;text-align:center;font:500 12px var(--f-mono);color:var(-
 .hl-d{margin-top:6px}.hl-d summary{cursor:pointer;font:600 12px var(--f-body);color:var(--muted)}.hl-d summary:hover{color:var(--fg)}
 .hl{margin-top:8px;font-size:12.5px;line-height:1.45}.hl b{font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.hl ul{margin:4px 0 0;padding-left:16px}.hl li{margin:3px 0}
 details.more{margin-top:10px}details.more>summary{cursor:pointer;font:600 13px var(--f-body);color:var(--accent);padding:8px 0}
-/* symulator */
+/* simulator */
 .warnbox{border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line2));background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:18px;padding:16px 20px;font-size:14.5px;line-height:1.55}
 .warnbox b{color:var(--fg)}.inputs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:end}
 .field label{display:block;font:600 11.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
@@ -193,7 +202,7 @@ details.more{margin-top:10px}details.more>summary{cursor:pointer;font:600 13px v
 @media (max-width:560px){.tiles4{grid-template-columns:minmax(0,1fr)}.brand span{display:none}.panel{padding:16px;border-radius:18px}section.s{padding-top:52px}.deltas .dl{flex:1 1 40%}}
 @media (prefers-reduced-motion:reduce){.rise,.baro .needle{animation:none}.baro .needle{transform:rotate(var(--rot))}html{scroll-behavior:auto}}
 
-/* ===== v3: wykończenie premium + aplikacja na telefonie ===== */
+/* ===== v3: premium finish + phone app ===== */
 html{-webkit-tap-highlight-color:transparent}
 body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.035;mix-blend-mode:overlay;
  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}

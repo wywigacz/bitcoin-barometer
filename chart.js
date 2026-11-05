@@ -2,7 +2,7 @@
 const D=window.__BTC__, N=D.dates.length, LAST=D.dates[N-1], MAXH=Math.max(...D.fc.map(f=>f.h));
 const css=getComputedStyle(document.documentElement), C=n=>css.getPropertyValue(n).trim();
 const fmtD=d=>new Date(d*864e5).toISOString().slice(0,10);
-const fmtP=v=>v==null?'–':Math.round(v).toLocaleString('pl-PL').replace(/\s/g,' ');
+const fmtP=v=>v==null?'–':Math.round(v).toLocaleString('en-US');
 const el=document.getElementById('chart'), cx=document.getElementById('cx'), tip=document.getElementById('tip');
 let months=12,showEv=true;
 const evBox=document.getElementById('evtoggle');if(evBox)evBox.onchange=()=>{showEv=evBox.checked;draw();};
@@ -58,19 +58,19 @@ function hover(e){
  const r=el.getBoundingClientRect(),px=e.clientX-r.left;if(px<geo.pl||px>geo.W-geo.pr){off();return;}
  const x=geo.x0+(px-geo.pl)/(geo.W-geo.pl-geo.pr)*(geo.x1-geo.x0);let html;
  const near=(geo.ev||[]).reduce((b,o)=>Math.abs(o.x-px)<9&&(!b||Math.abs(o.x-px)<Math.abs(b.x-px))?o:b,null);
- if(near){const e=near.e;html=`<b>${fmtD(e.d)}</b><div style="display:block;color:var(--fg);margin-bottom:4px">${e.t}</div><div><span>Kategoria</span><span>${e.c}</span></div>`+(e.r==null?'':`<div><span>BTC po 3 dniach</span><span style="color:${e.r>=0?C('--green'):C('--red')}">${e.r>0?'+':''}${e.r}%</span></div>`);}
+ if(near){const e=near.e;html=`<b>${fmtD(e.d)}</b><div style="display:block;color:var(--fg);margin-bottom:4px">${e.t}</div><div><span>Category</span><span>${e.c}</span></div>`+(e.r==null?'':`<div><span>BTC 3 days later</span><span style="color:${e.r>=0?C('--green'):C('--red')}">${e.r>0?'+':''}${e.r}%</span></div>`);}
  else if(x<=LAST+.5){let lo=0,hi=N-1;while(lo<hi){const m=(lo+hi)>>1;if(D.dates[m]<x)lo=m+1;else hi=m;}
   const i=Math.max(0,lo-(Math.abs(D.dates[lo-1]-x)<Math.abs(D.dates[lo]-x)?1:0));
-  html=`<b>${fmtD(D.dates[i])}</b><div><span>Cena</span><span>${fmtP(D.price[i])} USD</span></div>`+(D.real[i]!=null?`<div><span>Średnia cena zakupu</span><span>${fmtP(D.real[i])}</span></div>`:'')+(D.ma200w[i]!=null?`<div><span>Średnia z 4 lat</span><span>${fmtP(D.ma200w[i])}</span></div>`:'');
- }else{const xs=Math.min(x,LAST+MAXH);html=`<b>${fmtD(Math.round(x))} <span style="color:var(--accent)">prognoza</span></b>`+
-  [['P90','p90'],['Mediana','p50'],['P10','p10']].map(([a,k])=>`<div><span>${a}</span><span>${fmtP(interp(k,xs))} USD</span></div>`).join('');}
+  html=`<b>${fmtD(D.dates[i])}</b><div><span>Price</span><span>${fmtP(D.price[i])} USD</span></div>`+(D.real[i]!=null?`<div><span>Average purchase price</span><span>${fmtP(D.real[i])}</span></div>`:'')+(D.ma200w[i]!=null?`<div><span>4-year average</span><span>${fmtP(D.ma200w[i])}</span></div>`:'');
+ }else{const xs=Math.min(x,LAST+MAXH);html=`<b>${fmtD(Math.round(x))} <span style="color:var(--accent)">forecast</span></b>`+
+  [['P90','p90'],['Median','p50'],['P10','p10']].map(([a,k])=>`<div><span>${a}</span><span>${fmtP(interp(k,xs))} USD</span></div>`).join('');}
  cx.style.display='block';cx.style.left=px+'px';tip.innerHTML=html;tip.style.display='block';
  const tw=tip.offsetWidth;tip.style.left=Math.min(Math.max(px+14,0),r.width-tw)+'px';tip.style.top='12px';}
 function off(){cx.style.display='none';tip.style.display='none';}
 el.addEventListener('pointermove',hover);el.addEventListener('pointerleave',off);
 document.querySelectorAll('#rng button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#rng button').forEach(x=>x.classList.remove('on'));b.classList.add('on');months=+b.dataset.m;draw();});
 
-/* wykres wskaźnika złożonego */
+/* composite indicator chart */
 const el2=document.getElementById('chart2'),tip2=document.getElementById('tip2');let g2={};
 function draw2(){
  const W=el2.clientWidth||900,H=Math.round(Math.max(190,Math.min(260,W*.24))),pl=40,pr=16,pt=10,pb=24;
@@ -88,7 +88,7 @@ function draw2(){
  el2.querySelector('svg')?.remove();el2.insertAdjacentHTML('afterbegin',s);}
 el2.addEventListener('pointermove',e=>{const r=el2.getBoundingClientRect(),px=e.clientX-r.left;if(px<g2.pl||px>g2.W-g2.pr){tip2.style.display='none';return;}
  const x=g2.x0+(px-g2.pl)/(g2.W-g2.pl-g2.pr)*(g2.x1-g2.x0);let i=Math.round(N-1-(LAST-x));i=Math.min(N-1,Math.max(0,i));const v=D.comp[i];
- if(v==null){tip2.style.display='none';return;}tip2.innerHTML=`<b>${fmtD(D.dates[i])}</b><div><span>Wskaźnik</span><span>${v>0?'+':''}${v.toFixed(2)}</span></div><div><span>Cena</span><span>${fmtP(D.price[i])} USD</span></div>`;
+ if(v==null){tip2.style.display='none';return;}tip2.innerHTML=`<b>${fmtD(D.dates[i])}</b><div><span>Indicator</span><span>${v>0?'+':''}${v.toFixed(2)}</span></div><div><span>Price</span><span>${fmtP(D.price[i])} USD</span></div>`;
  tip2.style.display='block';tip2.style.left=Math.min(Math.max(px+14,0),r.width-tip2.offsetWidth)+'px';tip2.style.top='8px';});
 el2.addEventListener('pointerleave',()=>tip2.style.display='none');
 function all(){draw();draw2();}

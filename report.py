@@ -1,6 +1,5 @@
-"""Dashboard HTML: jeden samodzielny plik (CSS + JS + dane), działa offline."""
+"""Dashboard HTML: one self-contained file (CSS + JS + data) that works offline."""
 import html
-import re
 import json
 import math
 from datetime import datetime
@@ -11,36 +10,36 @@ import pandas as pd
 import config as C
 
 # ----------------------------------------------------------------------------------------------
-# Dane pomocnicze
+# Helper data
 # ----------------------------------------------------------------------------------------------
 GROUPS = [
-    ("Wycena: cena na tle historii", "Porównujemy dzisiejszą cenę z tym, ile średnio zapłacili posiadacze i jaka była cena w ostatnich latach. To najlepiej sprawdzające się wskaźniki.", ["mvrv", "ma200w", "mayer"]),
-    ("Kopalnie Bitcoina", "Kiedy kopanie przestaje się opłacać, część kopalni się poddaje. Historycznie bywało to okolicą dna cen.", ["puell", "hashribbon"]),
-    ("Nastroje i pożyczone pieniądze", "Strach i chciwość inwestorów, zakłady na pożyczone pieniądze oraz ilość gotówki gotowej do kupowania.", ["fng", "funding", "stable"]),
-    ("Gospodarka i pieniądze na świecie", "Od 2020 roku Bitcoin zachowuje się często jak ryzykowna akcja technologiczna, ale to się zmienia.", ["m2", "ndx", "dxy", "vix", "rates"]),
-    ("Cykl 4-letni", "Co około 4 lata następuje „halving” (nagroda za kopanie spada o połowę). Historycznie ceny rosły po nim przez ok. 1,5 roku.", ["halving", "pi"]),
+    ("Valuation: today's price against history", "We compare today's price with what holders paid on average and with the price over recent years. These are the indicators that have held up best.", ["mvrv", "ma200w", "mayer"]),
+    ("Bitcoin miners", "When mining stops paying, some miners give up. Historically this has often happened near price bottoms.", ["puell", "hashribbon"]),
+    ("Mood and borrowed money", "Investor fear and greed, bets made with borrowed money, and the amount of cash ready to buy.", ["fng", "funding", "stable"]),
+    ("The economy and money around the world", "Since 2020 Bitcoin has often behaved like a risky tech stock, but that is changing.", ["m2", "ndx", "dxy", "vix", "rates"]),
+    ("The 4-year cycle", "About every 4 years there is a “halving” (the reward for mining is cut in half). Historically prices rose for about 1.5 years afterwards.", ["halving", "pi"]),
 ]
 LABELS = {
-    "mvrv": "Zysk posiadaczy (MVRV)", "ma200w": "Cena vs średnia z 4 lat", "mayer": "Cena vs średnia z 200 dni",
-    "puell": "Opłacalność kopania", "hashribbon": "Poddawanie się kopalni", "fng": "Strach i chciwość",
-    "funding": "Zakłady na wzrost (pożyczone)", "stable": "Gotówka w kryptowalutach", "m2": "Ilość pieniędzy w USA",
-    "dxy": "Siła dolara", "ndx": "Giełda technologiczna", "vix": "Strach na giełdzie (VIX)", "rates": "Oprocentowanie pieniądza",
-    "pi": "Ostrzeżenie o szczycie (Pi Cycle)", "halving": "Miejsce w cyklu 4-letnim",
+    "mvrv": "Holders' profit (MVRV)", "ma200w": "Price vs 4-year average", "mayer": "Price vs 200-day average",
+    "puell": "Mining profitability", "hashribbon": "Miners giving up", "fng": "Fear and greed",
+    "funding": "Bets on a rise (borrowed money)", "stable": "Cash in crypto (stablecoins)", "m2": "Amount of money in the US",
+    "dxy": "Dollar strength", "ndx": "Tech stocks", "vix": "Stock market fear (VIX)", "rates": "Interest rates",
+    "pi": "Top warning (Pi Cycle)", "halving": "Place in the 4-year cycle",
 }
 SRC_NOTE = {
-    "mvrv": "powyżej 1 = posiadacze średnio na plusie", "ma200w": "1,0 = równo ze średnią z 4 lat", "mayer": "1,0 = równo ze średnią z 200 dni",
-    "puell": "niżej = kopanie mniej zarabia niż zwykle", "hashribbon": "czy moc kopalni ostatnio spada", "fng": "0 = paniczny strach, 100 = euforia",
-    "funding": "dodatnie = więcej zakładów na wzrost", "stable": "wzrost = więcej gotówki do wydania", "m2": "więcej pieniędzy = zwykle lepiej dla ceny",
-    "dxy": "mocniejszy dolar zwykle szkodzi", "ndx": "zmiana z ostatnich 3 miesięcy", "vix": "wyżej = więcej strachu", "rates": "zmiana z pół roku, punkty proc.",
-    "pi": "poniżej 1 = brak ostrzeżenia", "halving": "dni od ostatniego halvingu",
+    "mvrv": "above 1 = holders are in profit on average", "ma200w": "1.0 = level with the 4-year average", "mayer": "1.0 = level with the 200-day average",
+    "puell": "lower = mining earns less than usual", "hashribbon": "whether mining power has been falling lately", "fng": "0 = panic, 100 = euphoria",
+    "funding": "positive = more bets on a rise", "stable": "rising = more cash ready to spend", "m2": "more money = usually better for the price",
+    "dxy": "a stronger dollar usually hurts", "ndx": "change over the last 3 months", "vix": "higher = more fear", "rates": "change over 6 months, percentage points",
+    "pi": "below 1 = no warning", "halving": "days since the last halving",
 }
+MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
 def n(v, d=0, suffix=""):
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return "–"
-    s = f"{v:,.{d}f}".replace(",", " ").replace(".", ",")
-    return s + suffix
+    return f"{v:,.{d}f}" + suffix
 
 
 def raw_value(k, fe):
@@ -48,12 +47,12 @@ def raw_value(k, fe):
     try:
         return {
             "mvrv": n(g("mvrv"), 2), "ma200w": n(g("ma200w"), 2, "×"), "mayer": n(g("mayer"), 2, "×"),
-            "puell": n(g("puell"), 2), "hashribbon": "poddają się" if g("hashcap") == 1 else ("nie" if g("hashcap") == 0 else "–"),
+            "puell": n(g("puell"), 2), "hashribbon": "giving up" if g("hashcap") == 1 else ("no" if g("hashcap") == 0 else "–"),
             "fng": n(g("fng"), 0), "funding": n((g("funding") or float("nan")) * 100, 4, "%"),
-            "stable": n((g("stable30") or float("nan")) * 100, 1, "%"), "m2": n((g("m2yoy") or float("nan")) * 100, 1, "% r/r") if g("m2yoy") is not None else "brak danych",
+            "stable": n((g("stable30") or float("nan")) * 100, 1, "%"), "m2": n((g("m2yoy") or float("nan")) * 100, 1, "% y/y") if g("m2yoy") is not None else "no data",
             "dxy": n((g("dxy30") or float("nan")) * 100, 1, "%"), "ndx": n((g("ndx90") or float("nan")) * 100, 1, "%"),
-            "vix": n(g("vix"), 1), "rates": n(g("rates180"), 2, " p.p."), "pi": n(g("pi"), 2),
-            "halving": n(g("halv_days"), 0, " dni"),
+            "vix": n(g("vix"), 1), "rates": n(g("rates180"), 2, " pp"), "pi": n(g("pi"), 2),
+            "halving": n(g("halv_days"), 0, " days"),
         }[k]
     except Exception:
         return "–"
@@ -64,12 +63,12 @@ def ser_list(s, nd=2):
 
 
 # ----------------------------------------------------------------------------------------------
-# Sekcje HTML
+# HTML sections
 # ----------------------------------------------------------------------------------------------
 def gauge_svg(v):
-    """Półokrągły wskaźnik -1..+1."""
+    """Semicircular gauge from -1 to +1."""
     cx, cy, r = 150, 150, 118
-    ang = math.pi * (1 - (v + 1) / 2)              # +1 -> 0 rad (prawo), -1 -> pi (lewo)
+    ang = math.pi * (1 - (v + 1) / 2)              # +1 -> 0 rad (right), -1 -> pi (left)
     nx, ny = cx + (r - 22) * math.cos(ang), cy - (r - 22) * math.sin(ang)
     ticks = ""
     for i in range(0, 21):
@@ -77,28 +76,28 @@ def gauge_svg(v):
         r1, r2 = (r + 8, r + 16) if i % 5 == 0 else (r + 8, r + 12)
         ticks += (f'<line x1="{cx + r1 * math.cos(a):.1f}" y1="{cy - r1 * math.sin(a):.1f}" '
                   f'x2="{cx + r2 * math.cos(a):.1f}" y2="{cy - r2 * math.sin(a):.1f}" class="gt"/>')
-    return f"""<svg viewBox="0 0 300 185" class="gauge" role="img" aria-label="Wskaźnik złożony {v:+.2f}">
+    return f"""<svg viewBox="0 0 300 185" class="gauge" role="img" aria-label="Composite indicator {v:+.2f}">
 <defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" style="stop-color:var(--red)"/><stop offset=".5" style="stop-color:var(--amber)"/><stop offset="1" style="stop-color:var(--green)"/></linearGradient></defs>
 <path d="M {cx-r} {cy} A {r} {r} 0 0 1 {cx+r} {cy}" fill="none" stroke="var(--track)" stroke-width="16" stroke-linecap="round"/>
 <path d="M {cx-r} {cy} A {r} {r} 0 0 1 {cx+r} {cy}" fill="none" stroke="url(#gg)" stroke-width="16" stroke-linecap="round" opacity=".92"/>
 {ticks}
 <g class="needle" style="--rot:{(v) * 90:.1f}deg"><line x1="{cx}" y1="{cy}" x2="{cx}" y2="{cy-(r-22)}" stroke="var(--fg)" stroke-width="3" stroke-linecap="round"/></g>
 <circle cx="{cx}" cy="{cy}" r="8" fill="var(--fg)"/><circle cx="{cx}" cy="{cy}" r="3" fill="var(--bg2)"/>
-<text x="{cx-r}" y="{cy+22}" text-anchor="middle" class="gl">drogo</text>
-<text x="{cx+r}" y="{cy+22}" text-anchor="middle" class="gl">tanio</text></svg>"""
+<text x="{cx-r}" y="{cy+22}" text-anchor="middle" class="gl">expensive</text>
+<text x="{cx+r}" y="{cy+22}" text-anchor="middle" class="gl">cheap</text></svg>"""
 
 
 def cycle_html(days):
     total = 1460
-    zones = [(0, 365, "Wzrosty", "var(--blue)"), (365, 560, "Szczyt", "var(--amber)"),
-             (560, 770, "Spadki", "var(--red)"), (770, 1000, "Dno", "var(--green)"), (1000, 1460, "Odbudowa", "var(--violet)")]
-    seg = "".join(f'<div class="zone" style="flex:{b-a};--c:{c}" title="{nm}: dni {a}–{b} po halvingu"><span>{nm}</span></div>' for a, b, nm, c in zones)
+    zones = [(0, 365, "Rally", "var(--blue)"), (365, 560, "Peak", "var(--amber)"),
+             (560, 770, "Decline", "var(--red)"), (770, 1000, "Bottom", "var(--green)"), (1000, 1460, "Recovery", "var(--violet)")]
+    seg = "".join(f'<div class="zone" style="flex:{b-a};--c:{c}" title="{nm}: days {a}–{b} after the halving"><span>{nm}</span></div>' for a, b, nm, c in zones)
     d = days if days is not None and not math.isnan(days) else 0
-    cur = next((nm for a, b, nm, _ in zones if a <= d < b), "Odbudowa")
+    cur = next((nm for a, b, nm, _ in zones if a <= d < b), "Recovery")
     pos = min(max(d / total, 0), 1) * 100
     return (f'<div class="cycle"><div class="zones">{seg}<div class="marker" style="left:{pos:.2f}%"><i></i></div></div>'
-            f'<div class="cyc-foot">Minęło <b>{n(d)} dni</b> od ostatniego halvingu ({C.HALVINGS[-1]}). Etap cyklu: <b>{cur}</b>. '
-            f'Następny halving ok. {C.NEXT_HALVING}.</div></div>')
+            f'<div class="cyc-foot"><b>{n(d)} days</b> have passed since the last halving ({C.HALVINGS[-1]}). Cycle stage: <b>{cur}</b>. '
+            f'Next halving around {C.NEXT_HALVING}.</div></div>')
 
 
 def forecast_cards(res):
@@ -110,85 +109,85 @@ def forecast_cards(res):
         pos = lambda v: (math.log(v) - lo) / (hi - lo) * 100
         chg = (f["p50"] / p0 - 1) * 100
         up = f["prob_up"] * 100
-        badge = ('<span class="badge on">wsparte modelami</span>' if q["active"]
-                 else '<span class="badge">typowe wahania</span>')
+        badge = ('<span class="badge on">backed by models</span>' if q["active"]
+                 else '<span class="badge">typical swings</span>')
         v = f.get("view")
-        view = (f'<div class="view"><span class="muted sm">Co sugerują wskaźniki <i>(testy nie potwierdzają, że to działa)</i></span>'
-                f'<b>{n(v["p50"])}</b><span class="muted sm"> · {(v["p50"]/p0-1)*100:+.1f}% · szansa wzrostu {v["prob_up"]*100:.0f}%</span></div>') if v else ""
+        view = (f'<div class="view"><span class="muted sm">What the indicators suggest <i>(tests do not confirm that this works)</i></span>'
+                f'<b>{n(v["p50"])}</b><span class="muted sm"> · {(v["p50"]/p0-1)*100:+.1f}% · chance of a rise {v["prob_up"]*100:.0f}%</span></div>') if v else ""
         cards += f"""<article class="card fc">
-<header><h3>Za {f['horizon']} dni</h3>{badge}</header>
-<div class="muted sm">do {f['target']}</div>
+<header><h3>In {f['horizon']} days</h3>{badge}</header>
+<div class="muted sm">by {f['target']}</div>
 <div class="fc-med">{n(f['p50'])}<small> USD</small></div>
-<div class="fc-chg {'pos' if chg >= 0 else 'neg'}">{chg:+.1f}% względem dziś</div>
+<div class="fc-chg {'pos' if chg >= 0 else 'neg'}">{chg:+.1f}% vs today</div>
 <div class="range"><div class="r90" style="left:{pos(f['p10']):.1f}%;width:{pos(f['p90'])-pos(f['p10']):.1f}%"></div>
 <div class="r50" style="left:{pos(f['p25']):.1f}%;width:{pos(f['p75'])-pos(f['p25']):.1f}%"></div>
-<div class="tick" style="left:{pos(f['p50']):.1f}%"></div><div class="now" style="left:{pos(p0):.1f}%" title="cena dziś"></div></div>
-<div class="range-l"><span>{n(f['p10'])}</span><span class="muted">typowy zakres</span><span>{n(f['p90'])}</span></div>
-<div class="pup"><div class="ring" style="--p:{up:.0f}"><b>{up:.0f}%</b></div><span class="muted sm">szansa, że cena<br>będzie wyższa niż dziś</span></div>
+<div class="tick" style="left:{pos(f['p50']):.1f}%"></div><div class="now" style="left:{pos(p0):.1f}%" title="price today"></div></div>
+<div class="range-l"><span>{n(f['p10'])}</span><span class="muted">typical range</span><span>{n(f['p90'])}</span></div>
+<div class="pup"><div class="ring" style="--p:{up:.0f}"><b>{up:.0f}%</b></div><span class="muted sm">chance the price<br>will be higher than today</span></div>
 {view}</article>"""
     return cards
 
 
-MODEL_LAB = {"naive": "Zgadywanie: cena zostaje taka sama", "comp": "Ocena „tani czy drogi”", "ridge": "Połączenie wielu wskaźników",
-             "knn": "Szukanie podobnych dni z przeszłości", "gbq": "Samouczące się drzewa decyzji", "scan": "Szukanie powiązań na świecie",
-             "conf": "Sygnały potwierdzone testem z góry (trend)", "eq": "Prosta średnia wszystkich metod (1/N)"}
-LANG = {"en": "Kraje anglojęzyczne", "de": "Niemcy i okolice", "fr": "Francja", "es": "Hiszpania i Ameryka Łac.", "ru": "Rosja",
-        "ja": "Japonia", "ko": "Korea Południowa", "zh": "Chiny", "tr": "Turcja", "pl": "Polska", "pt": "Brazylia i Portugalia"}
+MODEL_LAB = {"naive": "Guess: the price stays the same", "comp": "“Cheap or expensive” score", "ridge": "Combination of many indicators",
+             "knn": "Looking for similar days in the past", "gbq": "Self-learning decision trees", "scan": "Searching for links around the world",
+             "conf": "Signals confirmed by a test set up in advance (trend)", "eq": "Simple average of all methods (1/N)"}
+LANG = {"en": "English-speaking countries", "de": "Germany and neighbours", "fr": "France", "es": "Spain and Latin America", "ru": "Russia",
+        "ja": "Japan", "ko": "South Korea", "zh": "China", "tr": "Turkey", "pl": "Poland", "pt": "Brazil and Portugal"}
 
 
 def tys(v):
-    return f"{v / 1000:.0f} tys."
+    return f"{v / 1000:.0f}k"
 
 
 def _stars(t, nobs):
     a = abs(t)
     if nobs < 8:
-        return "mało danych"
-    return "wysoka" if a >= 3 else "średnia" if a >= 2 else "niska"
+        return "too little data"
+    return "high" if a >= 3 else "medium" if a >= 2 else "low"
 
 
 def summary_html(res, ens, E):
     p0 = res["price"]
     fc = {f["horizon"]: f for f in res["forecasts"]}
-    names = {7: "za tydzień", 30: "za miesiąc", 90: "za 3 miesiące", 180: "za pół roku"}
-    items = "".join(f'<li><b>{names.get(H, f"za {H} dni")}:</b> od {tys(fc[H]["p10"])} do {tys(fc[H]["p90"])} USD</li>' for H in fc)
+    names = {7: "in a week", 30: "in a month", 90: "in 3 months", 180: "in 6 months"}
+    items = "".join(f'<li><b>{names.get(H, f"in {H} days")}:</b> from {tys(fc[H]["p10"])} to {tys(fc[H]["p90"])} USD</li>' for H in fc)
     none = all(h["alpha"] == 0 for h in ens["horizons"].values())
     if none:
-        direction = ('<b>Czy cena pójdzie w górę, czy w dół? Tego nie umiemy wiarygodnie przewidzieć.</b> Sprawdziliśmy to na historii: '
-                     'żadna z naszych metod nie była lepsza od prostego założenia „cena zostanie taka sama”. Szansa na wzrost to więc około 50 na 50.')
+        direction = ('<b>Will the price go up or down? We cannot reliably predict that.</b> We checked this against history: '
+                     'none of our methods did better than the simple assumption “the price will stay the same”. So the chance of a rise is about 50/50.')
     else:
         act = ", ".join(str(H) for H, h in ens["horizons"].items() if h["alpha"] > 0)
-        direction = (f'<b>Czy cena pójdzie w górę, czy w dół?</b> Na okresie {act} dni nasze metody okazały się lepsze od zgadywania i lekko przesuwają prognozę, '
-                     'ale to wciąż bardzo niepewne. Na pozostałych okresach nie umiemy tego wiarygodnie przewidzieć.')
+        direction = (f'<b>Will the price go up or down?</b> Over {act} days our methods turned out better than guessing and nudge the forecast slightly, '
+                     'but this is still very uncertain. For the other periods we cannot reliably predict it.')
     nxt = next((u for u in E["upcoming"] if u["cat"] != "nfp"), None)
-    ntxt = f'<li><b>Najbliższe ważne wydarzenie:</b> {html.escape(nxt["title"])} ({nxt["date"]}).</li>' if nxt else ""
-    return (f'<section class="card summary reveal"><h3>W skrócie</h3><ul>'
-            f'<li><b>Bitcoin kosztuje dziś {n(p0)} USD.</b> {res["regime"]}. <span class="muted">(Ocena rynku {res["composite"]:+.2f} w skali od −1 „drogo” do +1 „tanio”.)</span></li>'
-            f'<li><b>Gdzie może być cena?</b> Podane zakresy obejmują prawdziwą cenę w około 4 przypadkach na 5:<ul class="inner">{items}</ul></li>'
+    ntxt = f'<li><b>Next important event:</b> {html.escape(nxt["title"])} ({nxt["date"]}).</li>' if nxt else ""
+    return (f'<section class="card summary reveal"><h3>In short</h3><ul>'
+            f'<li><b>Bitcoin costs {n(p0)} USD today.</b> {res["regime"]}. <span class="muted">(Market score {res["composite"]:+.2f} on a scale from −1 “expensive” to +1 “cheap”.)</span></li>'
+            f'<li><b>Where could the price be?</b> The ranges given contain the real price in about 4 cases out of 5:<ul class="inner">{items}</ul></li>'
             f'<li>{direction}</li>'
-            f'<li><b>Co potrafimy dobrze:</b> oceniać, jak mocno cena może się wahać. W testach na historii nasze zakresy trafiały w około 8 na 10 przypadków.</li>'
-            f'{ntxt}</ul><p class="muted sm" style="margin:10px 0 0">Poniżej jest szczegółowe uzasadnienie. Trudne słowa wyjaśniamy na dole strony w słowniczku. To nie jest porada inwestycyjna.</p></section>')
+            f'<li><b>What we do well:</b> judging how much the price may swing. In tests on history our ranges were right in about 8 cases out of 10.</li>'
+            f'{ntxt}</ul><p class="muted sm" style="margin:10px 0 0">Below you will find the detailed reasoning. Difficult words are explained in the glossary at the bottom of the page. This is not investment advice.</p></section>')
 
 
 def glossary_html():
     g = [
-        ("Halving", "Co około 4 lata nagroda dla ludzi „kopiących” Bitcoina spada o połowę. Historycznie po halvingu ceny rosły przez ok. 1,5 roku, choć każdy kolejny wzrost był mniejszy."),
-        ("Typowy zakres („4 na 5”)", "Przedział cen, w którym cena zmieści się w około 80% przypadków. Jedna na 10 sytuacji będzie poniżej, jedna na 10 powyżej."),
-        ("Zmienność", "Jak mocno cena skacze w górę i w dół. Dla Bitcoina typowo około 2% dziennie."),
-        ("MVRV (zysk posiadaczy)", "Dzisiejsza cena podzielona przez średnią cenę, po jakiej posiadacze kupili swoje monety. Poniżej 1 większość jest na stracie, co historycznie bywało okolicą dołków."),
-        ("Średnia cena zakupu", "Średnia cena, po jakiej ostatnio „przeniesiono” wszystkie istniejące monety. Cena rzadko spada długo poniżej tej linii."),
-        ("Test na historii", "Sprawdzamy metodę tak, jakby była używana na bieżąco: w każdym dniu dostaje tylko dane, które były wtedy znane, i zgaduje, co będzie dalej."),
-        ("„Cena zostanie taka sama”", "Prosty punkt odniesienia. Każda metoda musi go pokonać, inaczej nie ma sensu jej używać."),
-        ("Szansa, że to przypadek", "Im niższa, tym pewniej przewaga metody jest prawdziwa. Wymagamy, żeby była mniejsza niż 10%."),
-        ("Korelacja", "Miara tego, jak mocno dwie rzeczy poruszają się razem: +1 zawsze razem, 0 niezależnie, −1 w przeciwne strony."),
-        ("FOMC", "Posiedzenie amerykańskiego banku centralnego (Fed), na którym decyduje o stopach procentowych."),
-        ("Opcje i DVOL", "Opcje to „ubezpieczenia” od zmian ceny. DVOL mówi, ile inwestorzy za to ubezpieczenie płacą, czyli jak duże wahania oczekują."),
-        ("Premia kimchi", "O ile Bitcoin w Korei Południowej jest droższy niż w reszcie świata. Dodatnia premia oznacza duży zapał koreańskich inwestorów."),
-        ("Put/Call", "Stosunek zakładów na spadek ceny do zakładów na wzrost. Poniżej 1 przeważają zakłady na wzrost."),
-        ("CME i CFTC", "CME to amerykańska giełda kontraktów terminowych, a CFTC urząd, który co tydzień publikuje, jak ustawiają się duże fundusze."),
-        ("Reżim rynku", "Nasz model rozpoznaje, czy rynek jest teraz w trybie „spokojnym”, czy „nerwowym” (duże wahania)."),
-        ("Trend potęgowy", "Długoterminowa linia, wokół której cena Bitcoina układała się przez 15 lat. Cena poniżej linii bywała okazją, powyżej przegrzaniem."),
-        ("Wiele testów naraz", "Gdy sprawdza się tysiące rzeczy, część wygląda na powiązaną tylko przez przypadek, jak trafienie szóstki w loterii przy tysiącach zakładów. Dlatego stosujemy surowsze kryteria."),
+        ("Halving", "About every 4 years the reward for the people “mining” Bitcoin is cut in half. Historically prices rose for about 1.5 years after a halving, although each rise was smaller than the one before."),
+        ("Typical range (“4 out of 5”)", "The price range that the price will fall into in about 80% of cases. One time in 10 it will be below, one time in 10 above."),
+        ("Volatility", "How much the price jumps up and down. For Bitcoin, typically around 2% a day."),
+        ("MVRV (holders' profit)", "Today's price divided by the average price at which holders bought their coins. Below 1 most holders are at a loss, which historically has often been near price bottoms."),
+        ("Average purchase price", "The average price at which all existing coins last “moved”. The price rarely stays below this line for long."),
+        ("Test on history", "We check a method as if it had been used in real time: on each day it only gets the data that was known then, and it guesses what happens next."),
+        ("“The price will stay the same”", "A simple benchmark. Every method has to beat it, otherwise there is no point in using it."),
+        ("Chance that it is luck", "The lower it is, the more sure we can be that a method's edge is real. We require it to be below 10%."),
+        ("Correlation", "A measure of how closely two things move together: +1 always together, 0 independently, −1 in opposite directions."),
+        ("FOMC", "Meeting of the US central bank (the Fed) where it decides on interest rates."),
+        ("Options and DVOL", "Options are “insurance” against price changes. DVOL shows how much investors pay for that insurance, that is, how big they expect the swings to be."),
+        ("Kimchi premium", "How much more Bitcoin costs in South Korea than in the rest of the world. A positive premium means Korean investors are very keen."),
+        ("Put/Call", "The ratio of bets on a price fall to bets on a rise. Below 1, bets on a rise dominate."),
+        ("CME and CFTC", "CME is a US futures exchange, and the CFTC is the agency that publishes every week how large funds are positioned."),
+        ("Market regime", "Our model recognises whether the market is currently in a “calm” or a “nervous” mode (big swings)."),
+        ("Power-law trend", "A long-term line around which Bitcoin's price has moved for 15 years. A price below the line has often been an opportunity, above it a sign of overheating."),
+        ("Many tests at once", "When you check thousands of things, some will look connected purely by luck, like winning the lottery when you buy thousands of tickets. That is why we use stricter criteria."),
     ]
     return "".join(f"<dt>{a}</dt><dd>{b}</dd>" for a, b in g)
 
@@ -200,21 +199,21 @@ def models_html(ens):
         for r in h["table"]:
             p = r["dm_p"]
             ptxt = "–" if p != p else f"{p*100:.0f}%"
-            lab = MODEL_LAB.get(r["model"], "Zespół metod (wynik końcowy)" if r["model"] == "ens" else r["label"])
+            lab = MODEL_LAB.get(r["model"], "Team of methods (final result)" if r["model"] == "ens" else r["label"])
             if r["model"] == "naive":
-                sk = '<td class="muted">punkt odniesienia</td>'
+                sk = '<td class="muted">benchmark</td>'
             else:
-                sk = (f'<td class="muted">0,0%</td>' if abs(r["skill"]) < 0.0005 else f'<td class="{"pos" if r["skill"] > 0 else "neg"}">{r["skill"]*100:+.1f}%</td>')
+                sk = (f'<td class="muted">0.0%</td>' if abs(r["skill"]) < 0.0005 else f'<td class="{"pos" if r["skill"] > 0 else "neg"}">{r["skill"]*100:+.1f}%</td>')
             rows += (f'<tr class="{"ens" if r["model"] == "ens" else ""}"><td>{lab}</td>{sk}<td>{ptxt}</td>'
-                     f'<td>{r["cover80"]*10:.1f} z 10</td></tr>')
+                     f'<td>{r["cover80"]*10:.1f} of 10</td></tr>')
         used = ", ".join(f'{MODEL_LAB[m].lower()} {v*100:.0f}%' for m, v in h["weights"].items() if v > 0.005 and m != "naive")
-        state = (f'<span class="badge on">używamy: {used}</span>' if h["alpha"] > 0
-                 else '<span class="badge">żadna metoda nie pokonała zgadywania</span>')
-        out += (f'<div class="card q"><header><h3>Za {H} dni</h3>{state}</header>'
-                f'<table class="tbl"><tr><th>Metoda</th><th title="O ile mniejsze błędy niż przy założeniu, że cena zostanie taka sama (plus = lepiej)">Lepsza od zgadywania?</th>'
-                f'<th title="Szansa, że przewaga to tylko przypadek. Im niżej, tym pewniej.">Szansa, że to przypadek</th><th title="W ilu na 10 przypadków cena zmieściła się w typowym zakresie (cel: 8)">Trafienia w zakres</th></tr>{rows}</table>'
-                f'<div class="muted sm" style="margin-top:8px">Sprawdzono na {h["n"]} sytuacjach z historii.'
-                + (lambda m: f' Przy tej liczbie prób test wykryłby przewagę od ok. {m * 100:.1f}% wzwyż (w 4 na 5 przypadków); mniejszej nie odróżni od przypadku.'
+        state = (f'<span class="badge on">in use: {used}</span>' if h["alpha"] > 0
+                 else '<span class="badge">no method beat guessing</span>')
+        out += (f'<div class="card q"><header><h3>In {H} days</h3>{state}</header>'
+                f'<table class="tbl"><tr><th>Method</th><th title="How much smaller the errors are than when assuming the price stays the same (plus = better)">Better than guessing?</th>'
+                f'<th title="Chance that the edge is just luck. The lower, the more certain.">Chance that it is luck</th><th title="In how many cases out of 10 the price stayed within the typical range (target: 8)">Hits within the range</th></tr>{rows}</table>'
+                f'<div class="muted sm" style="margin-top:8px">Checked on {h["n"]} situations from history.'
+                + (lambda m: f' With this many trials the test would detect an edge of about {m * 100:.1f}% or more (in 4 cases out of 5); a smaller one cannot be told apart from luck.'
                    if m == m else "")(float(np.nanmedian([r.get("mde", np.nan) for r in h["table"] if r["model"] not in ("naive", "ens", "eq")] or [np.nan])))
                 + '</div></div>')
     return out
@@ -226,22 +225,22 @@ def regions_html(ens, df, res):
     kim = df["btckrw"] / df["usdkrw"] / df["close"] - 1 if {"btckrw", "usdkrw"} <= set(df.columns) else None
     if kim is not None and kim.notna().any():
         k = kim.dropna()
-        tiles.append(("Czy w Korei Bitcoin jest droższy niż na świecie?", f"{k.iloc[-1]*100:+.1f}%".replace(".", ","), f"średnio z ostatnich 90 dni: {k.tail(90).mean()*100:+.1f}%".replace(".", ","),
-                      "Dodatnia wartość to tzw. premia kimchi: koreańscy inwestorzy kupują bardzo chętnie."))
+        tiles.append(("Is Bitcoin more expensive in Korea than in the rest of the world?", f"{k.iloc[-1]*100:+.1f}%", f"average over the last 90 days: {k.tail(90).mean()*100:+.1f}%",
+                      "A positive value is the so-called kimchi premium: Korean investors are buying very eagerly."))
     if last("dvol") is not None:
         vrp = ens["features_now"].get("dvol_vrp")
-        tiles.append(("Jak duże wahania ceny oczekują inwestorzy?", f"{last('dvol'):.0f}", "indeks DVOL z giełdy opcji, w skali roku",
-                      ("Inwestorzy płacą więcej niż zwykle za ubezpieczenie od wahań." if vrp is not None and vrp > 0.15 else "Ubezpieczenie od wahań kosztuje tyle, ile wynika z ostatnich ruchów." if vrp is not None else "")))
+        tiles.append(("How big do investors expect price swings to be?", f"{last('dvol'):.0f}", "DVOL index from the options exchange, annualised",
+                      ("Investors are paying more than usual for insurance against swings." if vrp is not None and vrp > 0.15 else "Insurance against swings costs about what recent moves would suggest." if vrp is not None else "")))
     if last("pcr") is not None:
-        tiles.append(("Zakłady na spadek kontra na wzrost", f"{last('pcr'):.2f}".replace(".", ","), "stosunek zakładów na spadek do zakładów na wzrost",
-                      "Poniżej 1 = przeważają zakłady na wzrost, powyżej 1 = na spadek."))
+        tiles.append(("Bets on a fall versus bets on a rise", f"{last('pcr'):.2f}", "ratio of bets on a fall to bets on a rise",
+                      "Below 1 = bets on a rise dominate, above 1 = bets on a fall."))
     if last("cot_lev") is not None:
-        tiles.append(("Duże fundusze na giełdzie CME", f"{last('cot_lev')*100:+.0f}%", "ich pozycja netto w stosunku do całego rynku",
-                      "Ujemna wartość często oznacza grę na różnicy cen, a nie zakład na spadek."))
-    tiles.append(("Czy rynek jest teraz „nerwowy”?", f"{ens['hmm']['p_hi']*100:.0f}%", "szansa, że trwa okres dużych wahań", "Model rozpoznaje to wyłącznie na podstawie przeszłości."))
+        tiles.append(("Large funds on the CME exchange", f"{last('cot_lev')*100:+.0f}%", "their net position relative to the whole market",
+                      "A negative value often means they are trading a price gap, not betting on a fall."))
+    tiles.append(("Is the market “nervous” right now?", f"{ens['hmm']['p_hi']*100:.0f}%", "chance that a period of big swings is under way", "The model recognises this purely from past data."))
     pz = ens["powerlaw_z"]
-    tiles.append(("Cena na tle długoterminowego trendu", ("poniżej" if pz < -0.3 else "powyżej" if pz > 0.3 else "w okolicy"), f"odchylenie: {pz:+.1f}".replace(".", ",") + " (w typowych jednostkach)",
-                  "Poniżej linii trendu cena bywała okazją, a daleko powyżej przegrzaniem."))
+    tiles.append(("Price against the long-term trend", ("below" if pz < -0.3 else "above" if pz > 0.3 else "close to it"), f"deviation: {pz:+.1f}" + " (in typical units)",
+                  "Below the trend line the price has often been an opportunity, and far above it a sign of overheating."))
     tl = "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b}</b><span class="muted sm">{c}</span><span class="muted sm" style="opacity:.85">{d}</span></div>' for a, b, c, d in tiles)
     rows = ""
     for k, name in LANG.items():
@@ -264,8 +263,8 @@ def _catlab(c):
     return events_data.CATEGORIES.get(c, c)
 
 
-_WL_CAT = {"biz": "Gospodarka", "pol": "Polityka", "armed": "Konflikty", "intl": "Stosunki międzynarodowe", "disaster": "Klęski", "law": "Prawo i przestępczość",
-           "health": "Zdrowie", "sci": "Nauka i technologia"}
+_WL_CAT = {"biz": "Economy", "pol": "Politics", "armed": "Conflicts", "intl": "International relations", "disaster": "Disasters", "law": "Law and crime",
+           "health": "Health", "sci": "Science and technology"}
 
 
 def _move_row(m, cache):
@@ -277,32 +276,32 @@ def _move_row(m, cache):
     wh = worldlog.day_headlines(d)
     detail = ""
     if nd and nd["cats"]:
-        chips += "".join(f'<span class="cause news" title="Tyle nagłówków o Bitcoinie z tego dnia dotyczyło tego tematu">{html.escape(_catlab(c["cat"]))} ×{c["n"]}</span>' for c in nd["cats"])
+        chips += "".join(f'<span class="cause news" title="This many Bitcoin headlines from that day were about this topic">{html.escape(_catlab(c["cat"]))} ×{c["n"]}</span>' for c in nd["cats"])
     if nd and nd["g"]:
-        detail += '<div class="hl"><b>Nagłówki prasowe o Bitcoinie z tego dnia</b><ul>' + "".join(
+        detail += '<div class="hl"><b>Bitcoin news headlines from that day</b><ul>' + "".join(
             f'<li>{html.escape(x["t"])} <span class="muted">({html.escape(x["d"])})</span></li>' for x in nd["g"][:5]) + "</ul></div>"
     if wh:
-        detail += '<div class="hl"><b>Co działo się na świecie tego dnia</b><ul>' + "".join(
+        detail += '<div class="hl"><b>What was happening in the world that day</b><ul>' + "".join(
             f'<li><span class="muted">{_WL_CAT.get(x["c"], x["c"])}:</span> {html.escape(x["t"])}</li>' for x in wh) + "</ul></div>"
     cnt = (len(nd["g"][:5]) if nd and nd["g"] else 0) + len(wh)
-    cell = chips or '<span class="muted sm">brak wydarzeń z naszej listy</span>'
+    cell = chips or '<span class="muted sm">no events from our list</span>'
     if detail:
-        cell += f'<details class="hl-d"><summary>Pokaż, co się działo ({cnt})</summary>{detail}</details>'
+        cell += f'<details class="hl-d"><summary>Show what happened ({cnt})</summary>{detail}</details>'
     return f'<tr><td>{d}</td><td class="{"pos" if m["ret"] >= 0 else "neg"}"><b>{m["ret"]:+.1f}%</b></td><td>{cell}</td></tr>'
 
 
 def moves_html(E):
     import news
     cache = news.load()
-    head = '<table class="tbl"><tr><th>Data</th><th>Zmiana ceny</th><th>Co się działo (wydarzenia i nagłówki)</th></tr>'
+    head = '<table class="tbl"><tr><th>Date</th><th>Price change</th><th>What was happening (events and headlines)</th></tr>'
     first = "".join(_move_row(m, cache) for m in E["moves"][:10])
     rest = "".join(_move_row(m, cache) for m in E["moves"][10:50])
     c = E["cover"]
-    note = (f'Przeanalizowaliśmy {c["n_moves"]} dużych skoków ceny w historii. Przy każdym zapisujemy, co działo się wtedy na świecie: wydarzenia z naszej listy, '
-            f'nagłówki prasowe o Bitcoinie (z archiwum GDELT) i dziennik wydarzeń światowych z Wikipedii. Nie twierdzimy, że to jest przyczyna skoku. '
-            f'Chodzi o to, żeby mieć gęstą oś czasu świata i szukać na niej powtarzających się wzorców (patrz „Szukanie powiązań”). '
-            f'Dla porównania: nawet dla losowo wybranych dni jakieś wydarzenie z listy znajduje się w {c["placebo_any"]*100:.0f}% przypadków.')
-    more = f'<details class="more"><summary>Pokaż kolejne skoki</summary>{head}{rest}</table></details>' if rest else ""
+    note = (f'We analysed {c["n_moves"]} big price jumps in history. For each one we record what was happening in the world: events from our list, '
+            f'news headlines about Bitcoin (from the GDELT archive) and the Wikipedia log of world events. We do not claim that this caused the jump. '
+            f'The point is to have a dense timeline of the world and look for repeating patterns on it (see “Searching for links”). '
+            f'For comparison: even for randomly chosen days, some event from the list turns up in {c["placebo_any"]*100:.0f}% of cases.')
+    more = f'<details class="more"><summary>Show more jumps</summary>{head}{rest}</table></details>' if rest else ""
     return f'{head}{first}</table>{more}<p class="muted sm" style="margin-top:10px">{note}</p>'
 
 
@@ -319,29 +318,29 @@ def study_html(E):
                  f'<td class="{"pos" if r.mean_ret >= 0 else "neg"}">{r.mean_ret:+.1f}%</td><td>{r.pos*100:.0f}%</td>'
                  f'<td><div class="dv"><i class="mid"></i><span class="{"g" if r.t >= 0 else "r"}" style="left:{50 if r.t >= 0 else 50 - w:.1f}%;width:{w:.1f}%"></span></div></td>'
                  f'<td>{_stars(r.t, r.n)}</td></tr>')
-    return (f'<table class="tbl"><tr><th>Rodzaj wydarzenia</th><th>Ile razy</th><th>Średnia zmiana ceny po 3 dniach</th><th>Jak często cena rosła</th><th></th><th>Pewność wyniku</th></tr>{rows}</table>'
-            f'<p class="muted sm" style="margin-top:10px">Liczymy zmianę ceny od końca dnia przed wydarzeniem do końca trzeciego dnia po nim. Pogrubione wiersze mają wysoką lub średnią pewność. '
-            f'Gdy rodzajów wydarzeń jest dużo, kilka wyników wychodzi „pewnych” przypadkiem. '
-            f'Dla wydarzeń wykrywanych automatycznie z rynków (spadek akcji, skok strachu na giełdzie, dolar itd.) to głównie ruchy <b>w tych samych dniach</b>, a nie dowód, że Bitcoin reaguje później.</p>')
+    return (f'<table class="tbl"><tr><th>Type of event</th><th>How many times</th><th>Average price change after 3 days</th><th>How often the price rose</th><th></th><th>Confidence in the result</th></tr>{rows}</table>'
+            f'<p class="muted sm" style="margin-top:10px">We measure the price change from the end of the day before the event to the end of the third day after it. Bold rows have high or medium confidence. '
+            f'When there are many types of events, a few results come out “confident” by pure luck. '
+            f'For events detected automatically from markets (a stock drop, a jump in stock market fear, the dollar and so on), these are mostly moves <b>on the same days</b>, not proof that Bitcoin reacts later.</p>')
 
 
-FEAT_LAB = {"comp": "Ogólna ocena rynku", "val": "Czy Bitcoin jest tani (wycena)", "macro": "Gospodarka i pieniądze na świecie",
-            "sent": "Nastroje i pożyczone pieniądze", "cycle": "Miejsce w cyklu 4-letnim", "mom30": "Zmiana ceny z 30 dni", "mom90": "Zmiana ceny z 90 dni",
-            "volpct": "Jak duże są teraz wahania", "powerlaw": "Cena na tle długoterminowego trendu", "hmm_hi": "Czy rynek jest „nerwowy”",
-            "hmm_mu": "Kierunek sugerowany przez model reżimów", "ev_eqdn30": "Spadki akcji w ostatnich 30 dniach", "ev_shock30": "Szoki na rynkach (30 dni)",
-            "ev_hack30": "Włamania do giełd (30 dni)", "stress": "Strach na giełdzie", "fomc_soon": "Decyzja Fed w ciągu 3 dni",
-            "opex_soon": "Wygasanie kontraktów w ciągu 3 dni", "kimchi": "Premia kimchi (Korea)", "wiki_west": "Zainteresowanie na Zachodzie",
-            "wiki_asia": "Zainteresowanie w Azji", "dvol_vrp": "Koszt ubezpieczenia od wahań", "cot": "Pozycje dużych funduszy",
-            "hurst": "Skłonność ruchów do kontynuacji", "pent": "Wzorce w kolejności ruchów", "vr5": "Cofanie się cen w 5 dni",
-            "acabs": "Serie dużych ruchów", "hill": "Częstość ekstremalnych ruchów", "kalman": "Trend ceny"}
+FEAT_LAB = {"comp": "Overall market score", "val": "Is Bitcoin cheap (valuation)", "macro": "The economy and money around the world",
+            "sent": "Mood and borrowed money", "cycle": "Place in the 4-year cycle", "mom30": "Price change over 30 days", "mom90": "Price change over 90 days",
+            "volpct": "How big the swings are right now", "powerlaw": "Price against the long-term trend", "hmm_hi": "Is the market “nervous”",
+            "hmm_mu": "Direction suggested by the regime model", "ev_eqdn30": "Stock market drops in the last 30 days", "ev_shock30": "Market shocks (30 days)",
+            "ev_hack30": "Exchange hacks (30 days)", "stress": "Stock market fear", "fomc_soon": "Fed decision within 3 days",
+            "opex_soon": "Contracts expiring within 3 days", "kimchi": "Kimchi premium (Korea)", "wiki_west": "Interest in the West",
+            "wiki_asia": "Interest in Asia", "dvol_vrp": "Cost of insurance against swings", "cot": "Positions of large funds",
+            "hurst": "Tendency of moves to continue", "pent": "Patterns in the order of moves", "vr5": "Price pullbacks within 5 days",
+            "acabs": "Streaks of big moves", "hill": "Frequency of extreme moves", "kalman": "Price trend"}
 
 
 def _level(x):
     a = abs(x)
     if a < 0.4:
-        return "normalnie"
-    word = "wysoko" if x > 0 else "nisko"
-    return ("dość " if a < 1.2 else "bardzo ") + word
+        return "normal"
+    word = "high" if x > 0 else "low"
+    return ("fairly " if a < 1.2 else "very ") + word
 
 
 def why_html(res, ens, E, df):
@@ -350,88 +349,88 @@ def why_html(res, ens, E, df):
     sig = ens["sigma"]
     cards = []
 
-    rows = "".join(f'<tr><td>{H} dni</td><td>±{h["sigma_H"]*100:.0f}%</td><td>{(fc[H]["p10"]/p0-1)*100:+.0f}% … {(fc[H]["p90"]/p0-1)*100:+.0f}%</td></tr>'
+    rows = "".join(f'<tr><td>{H} days</td><td>±{h["sigma_H"]*100:.0f}%</td><td>{(fc[H]["p10"]/p0-1)*100:+.0f}% … {(fc[H]["p90"]/p0-1)*100:+.0f}%</td></tr>'
                    for H, h in ens["horizons"].items())
     dv = df["dvol"].dropna().iloc[-1] if "dvol" in df and df["dvol"].notna().any() else None
     dvt = ""
     if dv is not None:
         impl = dv / math.sqrt(365)
-        cmpt = ("Inwestorzy spodziewają się więcej ruchów, niż wynika z ostatnich dni." if impl > sig * 100 * 1.08 else
-                "Inwestorzy spodziewają się mniej ruchów, niż wynika z ostatnich dni." if impl < sig * 100 * 0.92 else "To mniej więcej to samo, co wynika z ostatnich dni.")
-        dvt = (f'<li>Na giełdzie opcji (to rynek „ubezpieczeń” od zmian ceny) inwestorzy wyceniają dzienne wahania na ok. <b>{impl:.1f}%</b>, a nasz model wylicza <b>{sig*100:.1f}%</b>. {cmpt}</li>')
-    cards.append(("Skąd bierze się szerokość zakresu?",
-                  f'<ul><li>W ostatnim czasie cena Bitcoina zmienia się dziennie o około <b>{sig*100:.1f}%</b>. Liczymy to trzema niezależnymi sposobami i łączymy je, '
-                  f'a wagę każdego sposobu wybieramy według tego, który lepiej sprawdzał się w przeszłości.</li>'
-                  f'<li>Im dłuższy okres, tym większa niepewność (ale rośnie wolniej niż czas). Kształt rozkładu, czyli to, jak często zdarzają się duże skoki, bierzemy z prawdziwej historii Bitcoina, '
-                  f'z większym naciskiem na ostatnie dwa lata.</li>{dvt}'
-                  f'<li>Szansa, że rynek jest teraz w „nerwowym” trybie dużych wahań, wynosi wg naszego modelu <b>{ens["hmm"]["p_hi"]*100:.0f}%</b>.</li>'
-                  f'<li>Zakresy są skalibrowane na historii tak, żeby cena mieściła się w nich w ok. 8 na 10 przypadków.</li></ul>'
-                  f'<table class="tbl"><tr><th>Za ile</th><th>Typowe wahanie</th><th>Zakres ceny względem dziś (8 na 10)</th></tr>{rows}</table>'))
+        cmpt = ("Investors expect more movement than recent days would suggest." if impl > sig * 100 * 1.08 else
+                "Investors expect less movement than recent days would suggest." if impl < sig * 100 * 0.92 else "That is roughly the same as recent days suggest.")
+        dvt = (f'<li>On the options exchange (a market for “insurance” against price changes) investors are pricing daily swings at about <b>{impl:.1f}%</b>, while our model calculates <b>{sig*100:.1f}%</b>. {cmpt}</li>')
+    cards.append(("Where does the width of the range come from?",
+                  f'<ul><li>Lately Bitcoin\'s price has been changing by about <b>{sig*100:.1f}%</b> a day. We calculate this in three independent ways and combine them, '
+                  f'choosing the weight of each way according to how well it worked in the past.</li>'
+                  f'<li>The longer the period, the greater the uncertainty (but it grows more slowly than time). The shape of the distribution, that is, how often big jumps happen, we take from Bitcoin\'s real history, '
+                  f'with more emphasis on the last two years.</li>{dvt}'
+                  f'<li>According to our model, the chance that the market is now in a “nervous” mode of big swings is <b>{ens["hmm"]["p_hi"]*100:.0f}%</b>.</li>'
+                  f'<li>The ranges are calibrated on history so that the price stays within them in about 8 cases out of 10.</li></ul>'
+                  f'<table class="tbl"><tr><th>How far ahead</th><th>Typical swing</th><th>Price range vs today (8 out of 10)</th></tr>{rows}</table>'))
 
     lines = ""
     for H, h in ens["horizons"].items():
         cand = [r for r in h["table"] if r["model"] not in ("naive", "ens")]
         b = max(cand, key=lambda r: r["skill"])
         p = b["dm_p"]
-        verdict = "Przewaga jest prawdopodobnie prawdziwa." if (p == p and p <= 0.05) else ("Może coś w tym jest, ale to niepewne." if (p == p and p <= 0.20) else "Nie ma dowodu, że to działa.")
+        verdict = "The edge is probably real." if (p == p and p <= 0.05) else ("There may be something to it, but it is uncertain." if (p == p and p <= 0.20) else "There is no evidence that it works.")
         mname = MODEL_LAB.get(b["model"], b["label"])
-        better = "lepsza" if b["skill"] > 0 else "gorsza"
-        lines += (f'<li><b>Za {H} dni:</b> najlepsza metoda ({mname[0].lower() + mname[1:]}) była o {abs(b["skill"])*100:.1f}% {better} od zgadywania; '
-                  f'szansa, że to przypadek: {p*100:.0f}%. {verdict}</li>')
+        better = "better" if b["skill"] > 0 else "worse"
+        lines += (f'<li><b>In {H} days:</b> the best method ({mname[0].lower() + mname[1:]}) was {abs(b["skill"])*100:.1f}% {better} than guessing; '
+                  f'chance that it is luck: {p*100:.0f}%. {verdict}</li>')
     allzero = all(h["alpha"] == 0 for h in ens["horizons"].values())
-    cards.append(("Dlaczego nie mówimy „cena wzrośnie” lub „spadnie”?",
-                  f'<ul>{lines}</ul><p class="muted sm">Każdą metodę sprawdzaliśmy na historii tak, jakby używano jej na bieżąco: w każdym dniu znała tylko to, co było wtedy wiadome, '
-                  f'i zgadywała przyszłość. Porównujemy ją z prostym założeniem „cena zostaje taka sama”. Metodę dopuszczamy do prognozy dopiero, gdy szansa, że jej przewaga to przypadek, jest mniejsza niż 10%. '
-                  f'{"Żadna metoda nie spełniła tego warunku, więc środek prognozy to dzisiejsza cena." if allzero else "Tam, gdzie warunek spełniono, środek prognozy jest przesunięty."} '
-                  f'To częsty wynik dla Bitcoina: badacze zgadzają się, że kierunek ceny na miesiące jest bardzo trudny do przewidzenia, a wiarygodnie da się oceniać głównie wahania.</p>'))
+    cards.append(("Why don't we say “the price will rise” or “fall”?",
+                  f'<ul>{lines}</ul><p class="muted sm">We tested every method on history as if it had been used in real time: on each day it only knew what was known then, '
+                  f'and it guessed the future. We compare it with the simple assumption “the price stays the same”. A method is only allowed into the forecast when the chance that its edge is luck is below 10%. '
+                  f'{"No method met this condition, so the middle of the forecast is today&#39;s price." if allzero else "Where the condition was met, the middle of the forecast is shifted."} '
+                  f'This is a common result for Bitcoin: researchers agree that the direction of the price over months is very hard to predict, and what can be judged reliably is mainly the size of the swings.</p>'))
 
     H = 90 if 90 in ens["horizons"] else list(ens["horizons"])[0]
     ex = ens["horizons"][H]["explain"]
     drv = ""
     for name, c, x in ex.get("ridge", [])[:6]:
         eff = c * ens["horizons"][H]["sigma_H"] * 100
-        drv += (f'<tr><td>{FEAT_LAB.get(name, name)}</td><td>{_level(x)}</td><td class="{"pos" if eff >= 0 else "neg"}">{eff:+.1f}% ({"podnosi" if eff >= 0 else "obniża"})</td></tr>')
+        drv += (f'<tr><td>{FEAT_LAB.get(name, name)}</td><td>{_level(x)}</td><td class="{"pos" if eff >= 0 else "neg"}">{eff:+.1f}% ({"raises" if eff >= 0 else "lowers"})</td></tr>')
     view = fc[H]["view"]
     sg = sorted([p for p in res["signals"] if p["score"] is not None and p["weight"] > 0], key=lambda p: -(p["score"] * p["weight"]))
     low = lambda t: t[0].lower() + t[1:]
-    pos = ", ".join(low(LABELS[p["key"]]) for p in sg[:3] if p["score"] > 0) or "brak wyraźnych"
-    neg = ", ".join(low(LABELS[p["key"]]) for p in sg[::-1][:3] if p["score"] < 0) or "brak wyraźnych"
-    cards.append((f"Co sugerują wskaźniki (scenariusz na {H} dni, nie prognoza)",
-                  f'<p>Gdyby ufać wskaźnikom, środek prognozy wyniósłby <b>{n(view["p50"])} USD</b> ({(view["p50"]/p0-1)*100:+.1f}% względem dziś), a szansa wzrostu {view["prob_up"]*100:.0f}%. Najwięcej wnoszą:</p>'
-                  f'<table class="tbl"><tr><th>Czynnik</th><th>Jak jest dziś</th><th>Wpływ na prognozę</th></tr>{drv}</table>'
-                  f'<p class="muted sm" style="margin-top:8px">Najmocniej wskazują na wzrost: {pos}. Najmocniej na spadek: {neg}. '
-                  f'Ponieważ ta metoda nie przeszła testu na historii, traktuj to jako ciekawy scenariusz, a nie prognozę.</p>'))
+    pos = ", ".join(low(LABELS[p["key"]]) for p in sg[:3] if p["score"] > 0) or "none clearly"
+    neg = ", ".join(low(LABELS[p["key"]]) for p in sg[::-1][:3] if p["score"] < 0) or "none clearly"
+    cards.append((f"What the indicators suggest ({H}-day scenario, not a forecast)",
+                  f'<p>If we trusted the indicators, the middle of the forecast would be <b>{n(view["p50"])} USD</b> ({(view["p50"]/p0-1)*100:+.1f}% vs today), and the chance of a rise {view["prob_up"]*100:.0f}%. The biggest contributors:</p>'
+                  f'<table class="tbl"><tr><th>Factor</th><th>Where it is today</th><th>Effect on the forecast</th></tr>{drv}</table>'
+                  f'<p class="muted sm" style="margin-top:8px">Pointing most strongly to a rise: {pos}. Most strongly to a fall: {neg}. '
+                  f'Because this method did not pass the test on history, treat it as an interesting scenario, not a forecast.</p>'))
 
     kn = ex.get("knn", [])
     ka = ex.get("knn_all")
     if kn:
         rows = "".join(f'<tr><td>{d}</td><td class="{"pos" if r >= 0 else "neg"}">{r:+.0f}%</td></tr>' for d, r, _ in kn)
         kskill = [r for r in ens["horizons"][H]["table"] if r["model"] == "knn"][0]["skill"] * 100
-        cards.append((f"Podobne dni z przeszłości (co było {H} dni później)",
-                      f'<p>Szukamy dni z historii, w których sytuacja była podobna do dzisiejszej (ocena rynku, zmiany cen, wahania, miejsce w cyklu). '
-                      f'Wśród {ka["n"]} najbardziej podobnych dni <b>{ka["up"]*100:.0f}%</b> zakończyło się wzrostem, a typowa zmiana to <b>{ka["median_ret"]:+.0f}%</b>. '
-                      f'<b>Uwaga:</b> te dni pochodzą tylko z {ka.get("episodes", "?")} oddzielnych okresów (kolejne dni jednego rajdu to nie są niezależne przykłady), '
-                      f'a ta metoda w teście na historii wypadła o {abs(kskill):.0f}% {"lepiej" if kskill > 0 else "gorzej"} niż zgadywanie. Traktuj to jako ilustrację, nie dowód.</p>'
-                      f'<table class="tbl"><tr><th>Najbardziej podobne dni (co najmniej 30 dni od siebie)</th><th>Zmiana ceny po {H} dniach</th></tr>{rows}</table>'))
+        cards.append((f"Similar days from the past (what happened {H} days later)",
+                      f'<p>We look for days in history when the situation was similar to today (market score, price changes, swings, place in the cycle). '
+                      f'Of the {ka["n"]} most similar days, <b>{ka["up"]*100:.0f}%</b> ended with a rise, and the typical change was <b>{ka["median_ret"]:+.0f}%</b>. '
+                      f'<b>Note:</b> these days come from only {ka.get("episodes", "?")} separate periods (consecutive days of one rally are not independent examples), '
+                      f'and in the test on history this method came out {abs(kskill):.0f}% {"better" if kskill > 0 else "worse"} than guessing. Treat it as an illustration, not proof.</p>'
+                      f'<table class="tbl"><tr><th>Most similar days (at least 30 days apart)</th><th>Price change after {H} days</th></tr>{rows}</table>'))
 
     ev = E["events"]
     last = df.index[-1]
     rec = ev[(ev["date"] > last - pd.Timedelta(days=30)) & (ev["date"] <= last) & (~ev["cat"].isin(["nfp", "opex", "fomc"]))]
-    recl = "".join(f'<li>{r.date:%Y-%m-%d}: {html.escape(r.title)}</li>' for r in rec.itertuples()) or "<li>W ostatnich 30 dniach nie było żadnych dużych szoków ani wydarzeń z naszej listy.</li>"
-    up = "".join(f'<li>{u["date"]}: {html.escape(u["title"])}' + (f' <span class="muted">(zwykle po 3 dniach cena zmieniała się o {u["hist"]["mean_ret"]:+.1f}%, na podstawie {u["hist"]["n"]} podobnych wydarzeń)</span>' if u["hist"] else "") + "</li>"
+    recl = "".join(f'<li>{r.date:%Y-%m-%d}: {html.escape(r.title)}</li>' for r in rec.itertuples()) or "<li>In the last 30 days there were no big shocks or events from our list.</li>"
+    up = "".join(f'<li>{u["date"]}: {html.escape(u["title"])}' + (f' <span class="muted">(after 3 days the price usually changed by {u["hist"]["mean_ret"]:+.1f}%, based on {u["hist"]["n"]} similar events)</span>' if u["hist"] else "") + "</li>"
                  for u in E["upcoming"][:4])
-    cards.append(("Co dzieje się na świecie",
-                  f'<p style="margin-bottom:4px"><b>Ostatnie 30 dni</b></p><ul>{recl}</ul><p style="margin:10px 0 4px"><b>Nadchodzące</b></p><ul>{up}</ul>'
-                  f'<p class="muted sm">Takie wydarzenia podajemy też naszym metodom jako dodatkową wskazówkę. Zaczną wpływać na prognozę dopiero, gdy test na historii pokaże, że to pomaga.</p>'))
+    cards.append(("What is happening in the world",
+                  f'<p style="margin-bottom:4px"><b>Last 30 days</b></p><ul>{recl}</ul><p style="margin:10px 0 4px"><b>Coming up</b></p><ul>{up}</ul>'
+                  f'<p class="muted sm">We also feed such events to our methods as an extra hint. They will only start to affect the forecast once the test on history shows that this helps.</p>'))
 
-    cov = " · ".join(f'{H} dni: {[r for r in h["table"] if r["model"] == "ens"][0]["cover80"]*10:.1f}' for H, h in ens["horizons"].items())
-    cards.append(("Na ile można temu ufać?",
-                  f'<ul><li><b>Szerokość zakresu: można ufać.</b> W testach na historii cena mieściła się w podanym zakresie w tylu przypadkach na 10 ({cov}). Cel to 8.</li>'
-                  + ('<li><b>Kierunek ruchu: nie można ufać.</b> Nie ma dowodu, że potrafimy przewidzieć, czy cena pójdzie w górę, czy w dół, więc szansa wzrostu to około 50%.</li>'
+    cov = " · ".join(f'{H} days: {[r for r in h["table"] if r["model"] == "ens"][0]["cover80"]*10:.1f}' for H, h in ens["horizons"].items())
+    cards.append(("How far can you trust this?",
+                  f'<ul><li><b>Width of the range: you can trust it.</b> In tests on history the price stayed within the given range in this many cases out of 10 ({cov}). The target is 8.</li>'
+                  + ('<li><b>Direction of the move: you cannot trust it.</b> There is no evidence that we can predict whether the price will go up or down, so the chance of a rise is about 50%.</li>'
                      if allzero else
-                     '<li><b>Kierunek ruchu: częściowo.</b> Na części okresów nasze metody okazały się lepsze od zgadywania, ale próba jest mała, więc nie traktuj tego jak pewności.</li>') +
-                  '<li><b>Nagłe, rzadkie wydarzenia</b> (upadek giełdy, pandemia) bywają silniejsze od każdej prognozy. Mamy dane z tylko czterech pełnych cykli, a rynek się zmienia (fundusze ETF, firmy kupujące Bitcoina).</li>'
-                  '<li>System aktualizuje się sam i sam sprawdza swoje dawne prognozy (sekcja niżej).</li></ul>'))
+                     '<li><b>Direction of the move: partly.</b> For some periods our methods turned out better than guessing, but the sample is small, so do not treat it as a certainty.</li>') +
+                  '<li><b>Sudden, rare events</b> (an exchange collapse, a pandemic) can be stronger than any forecast. We have data from only four full cycles, and the market is changing (ETFs, companies buying Bitcoin).</li>'
+                  '<li>The system updates itself and checks its own past forecasts (section below).</li></ul>'))
     return "".join(f'<details class="card why"{" open" if i < 1 else ""}><summary><h3 class="ct">{t}</h3></summary><div class="why-b">{b}</div></details>'
                    for i, (t, b) in enumerate(cards))
 
@@ -440,58 +439,59 @@ def conclusion_text(ens):
     act = [H for H, h in ens["horizons"].items() if h["alpha"] > 0]
     off = [H for H, h in ens["horizons"].items() if h["alpha"] == 0]
     if not act:
-        s = ("Wniosek na dziś: żadna z metod nie jest istotnie lepsza od założenia „cena zostaje taka sama”, na żadnym z okresów. "
-             "Dlatego główna prognoza opiera się na tym, jak mocno cena zwykle się waha, a scenariusz ze wskaźników pokazujemy osobno jako ciekawostkę.")
+        s = ("Conclusion for today: none of the methods is significantly better than the assumption “the price stays the same”, for any of the periods. "
+             "That is why the main forecast is based on how much the price usually swings, and we show the scenario from the indicators separately, as a curiosity.")
     else:
-        s = (f"Wniosek na dziś: na okresie {', '.join(map(str, act))} dni nasze metody okazały się istotnie lepsze od zgadywania i przesuwają środek prognozy "
-             f"(ostrożnie: przy długich okresach przykłady z historii mocno się nakładają). "
-             + (f"Na okresie {', '.join(map(str, off))} dni prognoza opiera się na typowych wahaniach ceny." if off else ""))
-    return s + (" Szansa wzrostu około 50% to założenie neutralne: w historii Bitcoin rósł w ok. 60% okien 30-dniowych, ale uwzględnienie tego nie poprawiło wyników testu, "
-                "a dawne zyski nie muszą się powtórzyć. System aktualizuje się sam, więc wagi metod zmieniają się wraz z nowymi danymi.")
+        s = (f"Conclusion for today: over {', '.join(map(str, act))} days our methods turned out significantly better than guessing and shift the middle of the forecast "
+             f"(with caution: over long periods the examples from history overlap heavily). "
+             + (f"Over {', '.join(map(str, off))} days the forecast is based on typical price swings." if off else ""))
+    return s + (" A chance of a rise of about 50% is a neutral assumption: historically Bitcoin rose in about 60% of 30-day windows, but taking that into account did not improve the test results, "
+                "and past gains need not repeat. The system updates itself, so the weights of the methods change as new data comes in.")
 
 
 def _pctbar(p):
-    return f'<div class="pbar"><i style="left:{p*100:.0f}%"></i></div><div class="range-l sm muted"><span>rzadko</span><span>częściej niż w {p*100:.0f}% historii</span><span>często</span></div>'
+    return f'<div class="pbar"><i style="left:{p*100:.0f}%"></i></div><div class="range-l sm muted"><span>rare</span><span>higher than {p*100:.0f}% of history</span><span>common</span></div>'
 
 
 def regularity_html(Rg):
     nw, pc = Rg["now"], Rg["pct"]
     h, pe, vr, aa, hl = nw["hurst"], nw["pent"], nw["vr5"], nw["acabs"], nw["hill"]
     mk, kal, evt = Rg["markov"], Rg["kalman"], Rg["evt"]
-    cyc = ", ".join(f'{p:.0f} dni' for p, s in Rg["cycles"])
+    cyc = ", ".join(f'{p:.0f} days' for p, s in Rg["cycles"])
     tiles = [
-        ("Czy ruchy ceny mają tendencję do kontynuacji?", "wykładnik Hursta", f"{h:.2f}".replace(".", ","), pc["hurst"],
-         ("Wartość 0,5 to czysty przypadek. Tu: ruchy mają niewielką skłonność do kontynuacji." if h > 0.53 else "Wartość 0,5 to czysty przypadek. Tu: ruchy częściej się cofają." if h < 0.47 else "Wartość 0,5 to czysty przypadek, i tak właśnie jest.")),
-        ("Czy w kolejności ruchów są jakieś wzorce?", "entropia permutacyjna", f"{pe:.3f}".replace(".", ","), pc["pent"],
-         "Wartość 1 oznacza brak jakichkolwiek wzorców (czysty przypadek). Tak jest teraz." if pe > 0.98 else "Poniżej 1: pojawiają się powtarzalne wzorce w kolejności ruchów."),
-        ("Czy po wzroście częściej następuje spadek?", "iloraz wariancji", f"{vr:+.2f}".replace(".", ","), pc["vr5"],
-         "Ujemna wartość: ruchy w ciągu 5 dni lekko się cofają. Bliskie zera: czysty przypadek." if vr < 0 else "Dodatnia wartość: ruchy w ciągu 5 dni lekko się kumulują."),
-        ("Czy duże ruchy przychodzą seriami?", "grupowanie zmienności", f"{aa:+.2f}".replace(".", ","), pc["acabs"],
-         "Tak, wyraźnie: po dużym ruchu zwykle są kolejne. To jest ta część rynku, którą da się prognozować." if aa > 0.15 else "Słabo: duże ruchy zdarzają się dość niezależnie."),
-        ("Jak często zdarzają się ekstremalne ruchy?", "indeks ogona", f"{hl:.1f}".replace(".", ","), pc["hill"],
-         "Wartość około 3 oznacza, że ekstremalne ruchy są znacznie częstsze niż w „książkowym” rozkładzie." if hl < 4 else "Ekstremalne ruchy zdarzają się rzadziej niż zwykle w ostatnim roku."),
+        ("Do price moves tend to continue?", "Hurst exponent", f"{h:.2f}", pc["hurst"],
+         ("A value of 0.5 is pure chance. Here: moves have a slight tendency to continue." if h > 0.53 else "A value of 0.5 is pure chance. Here: moves more often reverse." if h < 0.47 else "A value of 0.5 is pure chance, and that is exactly what we see.")),
+        ("Are there any patterns in the order of moves?", "permutation entropy", f"{pe:.3f}", pc["pent"],
+         "A value of 1 means no patterns at all (pure chance). That is the case right now." if pe > 0.98 else "Below 1: repeating patterns are appearing in the order of moves."),
+        ("Does a rise tend to be followed by a fall?", "variance ratio", f"{vr:+.2f}", pc["vr5"],
+         "Negative value: moves over 5 days slightly reverse. Close to zero: pure chance." if vr < 0 else "Positive value: moves over 5 days slightly build on each other."),
+        ("Do big moves come in streaks?", "volatility clustering", f"{aa:+.2f}", pc["acabs"],
+         "Yes, clearly: a big move is usually followed by more. This is the part of the market that can be forecast." if aa > 0.15 else "Weakly: big moves happen fairly independently."),
+        ("How often do extreme moves happen?", "tail index", f"{hl:.1f}", pc["hill"],
+         "A value of around 3 means extreme moves are much more common than in a “textbook” distribution." if hl < 4 else "Extreme moves are happening less often than usual over the last year."),
     ]
-    tl = "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b2}</b><span class="muted sm" style="margin-top:-2px">nazwa techniczna: {tech}</span>{_pctbar(c)}<span class="muted sm">{d}</span></div>'
+    tl = "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b2}</b><span class="muted sm" style="margin-top:-2px">technical name: {tech}</span>{_pctbar(c)}<span class="muted sm">{d}</span></div>'
                  for a, tech, b2, c, d in tiles)
     nx = mk["next"]
-    names = ["spadek", "brak większej zmiany", "wzrost"]
-    ev = (f'<div class="card tile"><span class="muted sm">Jak zły może być pojedynczy dzień?</span><b>−{evt["var990"]*100:.1f}%</b>'
-          f'<span class="muted sm">Taki dzienny spadek zdarza się mniej więcej raz na 100 dni (według zwykłego rozkładu byłoby tylko −{evt["gauss99"]*100:.1f}%). '
-          f'Raz na 1000 dni: −{evt["var999"]*100:.1f}%.</span></div>') if evt else ""
-    extra = (f'<div class="card tile"><span class="muted sm">Co zwykle dzieje się po ostatnim tygodniu?</span><b>{max(nx)*100:.0f}% szans na: {names[int(np.argmax(nx))]}</b>'
-             f'<span class="muted sm">Po tygodniu „{names[mk["now"]]}” kolejny tydzień kończył się: spadkiem w {nx[0]*100:.0f}%, bez większej zmiany w {nx[1]*100:.0f}%, wzrostem w {nx[2]*100:.0f}% przypadków. '
-             f'{"Zależność jest słaba, ale możliwa." if mk["p_dep"] < 0.1 else "Praktycznie nie ma tu zależności."}</span></div>'
-             f'<div class="card tile"><span class="muted sm">Czy cena ma teraz wyraźny trend?</span><b>{kal["slope_w"]*100:+.2f}% na tydzień</b>'
-             f'<span class="muted sm">Błąd tej oceny to ±{kal["sd"]*100:.1f}%, więc {"trend nie różni się od zera." if abs(kal["z"]) < 2 else "trend jest wyraźny."}</span></div>'
-             f'<div class="card tile"><span class="muted sm">Czy zmienność ma powtarzalny rytm?</span><b>{Rg["cycles"][0][0]:.0f} dni</b>'
-             f'<span class="muted sm">Najsilniejsze rytmy: {cyc}. Rytm 7-dniowy to zwykły efekt dni tygodnia. Dłuższe rytmy są niepewne, bo mamy tylko około 15 lat danych.</span></div>')
+    names = ["a fall", "no major change", "a rise"]
+    weeks = ["down", "flat", "up"]
+    ev = (f'<div class="card tile"><span class="muted sm">How bad can a single day be?</span><b>−{evt["var990"]*100:.1f}%</b>'
+          f'<span class="muted sm">A daily drop this big happens roughly once in 100 days (a standard bell-curve distribution would say only −{evt["gauss99"]*100:.1f}%). '
+          f'Once in 1,000 days: −{evt["var999"]*100:.1f}%.</span></div>') if evt else ""
+    extra = (f'<div class="card tile"><span class="muted sm">What usually happens after the last week?</span><b>{max(nx)*100:.0f}% chance of {names[int(np.argmax(nx))]}</b>'
+             f'<span class="muted sm">After a “{weeks[mk["now"]]}” week, the next week ended with a fall in {nx[0]*100:.0f}%, no major change in {nx[1]*100:.0f}%, and a rise in {nx[2]*100:.0f}% of cases. '
+             f'{"The link is weak, but possible." if mk["p_dep"] < 0.1 else "There is practically no link here."}</span></div>'
+             f'<div class="card tile"><span class="muted sm">Does the price have a clear trend right now?</span><b>{kal["slope_w"]*100:+.2f}% per week</b>'
+             f'<span class="muted sm">The error of this estimate is ±{kal["sd"]*100:.1f}%, so {"the trend is not different from zero." if abs(kal["z"]) < 2 else "the trend is clear."}</span></div>'
+             f'<div class="card tile"><span class="muted sm">Does volatility have a repeating rhythm?</span><b>{Rg["cycles"][0][0]:.0f} days</b>'
+             f'<span class="muted sm">Strongest rhythms: {cyc}. The 7-day rhythm is simply the day-of-week effect. Longer rhythms are uncertain, because we only have about 15 years of data.</span></div>')
     dir_random = 0.47 <= h <= 0.57 and pe > 0.97 and abs(vr) < 0.1
     vol_struct = aa > 0.12
-    verdict = (("Kierunek ruchów ceny jest bliski czystemu przypadkowi. " if dir_random else
-                "W kierunku ruchów widać pewne wzorce, ale wymagają potwierdzenia testem na historii. ")
-               + ("Za to wielkość wahań ma wyraźną strukturę (duże ruchy przychodzą seriami, jest rytm tygodniowy, zdarzają się ekstremalne skoki), dlatego system prognozuje przede wszystkim zakres ceny i ryzyko. "
-                  if vol_struct else "Serie dużych ruchów są teraz słabe. ")
-               + "Wszystkie miary liczymy z ostatniego roku, więc zmieniają się z czasem.")
+    verdict = (("The direction of price moves is close to pure chance. " if dir_random else
+                "There are some patterns in the direction of moves, but they need to be confirmed by a test on history. ")
+               + ("The size of the swings, on the other hand, has a clear structure (big moves come in streaks, there is a weekly rhythm, extreme jumps happen), which is why the system mainly forecasts the price range and the risk. "
+                  if vol_struct else "Streaks of big moves are weak right now. ")
+               + "All measures are calculated from the last year, so they change over time.")
     return tl + ev + extra, verdict
 
 
@@ -499,41 +499,41 @@ def analogs_html(A):
     if not A or not A.get("rows"):
         return ""
     rows = "".join(f'<tr><td>{r["date"]}</td><td class="{"pos" if r["f30"] >= 0 else "neg"}">{r["f30"]:+.0f}%</td><td class="{"pos" if r["f90"] >= 0 else "neg"}">{r["f90"]:+.0f}%</td></tr>' for r in A["rows"])
-    return (f'<div class="panel" style="margin-bottom:18px"><h3 class="ct">Kiedy świat wyglądał podobnie do dzisiejszego?</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Opisujemy świat profilem z ostatnich 30 dni: ile wpisów w dzienniku wydarzeń dotyczyło wojen, rynków, banków, sankcji, wyborów, klęsk, pandemii, kryptowalut i innych tematów ({A["n_feat"]} cech). '
-            f'Szukamy okresów z najbardziej podobnym profilem i patrzymy, co robił potem Bitcoin. To ciekawostka, a nie prognoza: to tylko kilka oddzielnych epizodów.</p>'
-            f'<table class="tbl"><tr><th>Okres (koniec 30-dniowego okna)</th><th>Cena po 30 dniach</th><th>Cena po 90 dniach</th></tr>{rows}</table>'
-            f'<p class="muted sm" style="margin:10px 0 0">W {A["up30"]*100:.0f}% tych okresów cena po 30 dniach była wyższa, typowa zmiana: {A["med30"]:+.0f}% po 30 dniach i {A["med90"]:+.0f}% po 90 dniach. '
-            f'Bitcoin rósł w ok. 60% okien 30-dniowych w całej historii, więc samo to jeszcze nic nie dowodzi.</p></div>')
+    return (f'<div class="panel" style="margin-bottom:18px"><h3 class="ct">When did the world look similar to today?</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">We describe the world with a profile of the last 30 days: how many entries in the world events log were about wars, markets, banks, sanctions, elections, disasters, pandemics, crypto and other topics ({A["n_feat"]} features). '
+            f'We look for periods with the most similar profile and see what Bitcoin did next. This is a curiosity, not a forecast: it is only a handful of separate episodes.</p>'
+            f'<table class="tbl"><tr><th>Period (end of the 30-day window)</th><th>Price after 30 days</th><th>Price after 90 days</th></tr>{rows}</table>'
+            f'<p class="muted sm" style="margin:10px 0 0">In {A["up30"]*100:.0f}% of these periods the price was higher after 30 days; the typical change was {A["med30"]:+.0f}% after 30 days and {A["med90"]:+.0f}% after 90 days. '
+            f'Bitcoin rose in about 60% of all 30-day windows in its history, so this alone proves nothing yet.</p></div>')
 
 
 def scan_html(S):
     if S is None:
-        return '<div class="card empty"><b>Brak danych ze świata</b></div>', ""
+        return '<div class="card empty"><b>No data from the world</b></div>', ""
     s = S["summary"]
-    nt = f"{s['n_tests']:,}".replace(",", " ")
-    head = (f'<div class="card"><p style="margin:0 0 6px">Sprawdziliśmy <b>{nt} możliwych powiązań</b> między Bitcoinem a {s["n_series"]} wskaźnikami ze świata: '
-            f'giełdami i walutami ponad 20 krajów, ropą, złotem i żywnością, zainteresowaniem polityką i kryzysami (liczba wejść na Wikipedię), pogodą w miejscach, gdzie kopie się Bitcoina, '
-            f'plamami na Słońcu, trzęsieniami ziemi, fazami Księżyca i porą roku. Szukamy, czy to, co dzieje się dziś, zapowiada zmianę ceny Bitcoina za tydzień lub miesiąc.</p>'
-            f'<p class="muted sm" style="margin:0 0 8px">Gdy sprawdza się tak dużo rzeczy, część wygląda na powiązaną tylko przez przypadek (jak trafienie szóstki w loterii przy tysiącach zakładów). '
-            f'Dlatego stosujemy trzy sita: korektę na liczbę testów, sprawdzenie, czy zależność trzyma się w obu połowach historii, i test na najnowszych danych.</p>'
-            f'<div class="funnel"><div><b>{s["raw_p05"]}</b><span>wyglądało na powiązane</span></div><div><b>~{s["expected_fp"]:.0f}</b><span>tyle wyszłoby samym przypadkiem</span></div>'
-            f'<div><b>{s["n_fdr"]}</b><span>zostało po 1. sicie</span></div><div><b>{s["n_stable"]}</b><span>po 2. sicie</span></div>'
-            f'<div><b>{s["n_disc"]}</b><span>po 3. sicie (prawdziwe odkrycia)</span></div></div></div>')
+    nt = f"{s['n_tests']:,}"
+    head = (f'<div class="card"><p style="margin:0 0 6px">We checked <b>{nt} possible links</b> between Bitcoin and {s["n_series"]} indicators from around the world: '
+            f'stock markets and currencies of more than 20 countries, oil, gold and food, interest in politics and crises (Wikipedia page views), the weather where Bitcoin is mined, '
+            f'sunspots, earthquakes, phases of the Moon and the season of the year. We look at whether what happens today predicts a change in Bitcoin\'s price in a week or a month.</p>'
+            f'<p class="muted sm" style="margin:0 0 8px">When you check this many things, some will look connected purely by luck (like winning the lottery when you buy thousands of tickets). '
+            f'That is why we use three filters: a correction for the number of tests, a check that the link holds in both halves of history, and a test on the most recent data.</p>'
+            f'<div class="funnel"><div><b>{s["raw_p05"]}</b><span>looked connected</span></div><div><b>~{s["expected_fp"]:.0f}</b><span>how many luck alone would produce</span></div>'
+            f'<div><b>{s["n_fdr"]}</b><span>left after filter 1</span></div><div><b>{s["n_stable"]}</b><span>after filter 2</span></div>'
+            f'<div><b>{s["n_disc"]}</b><span>after filter 3 (real discoveries)</span></div></div></div>')
 
     def rows(df):
         out = ""
         for r in df.itertuples():
-            out += (f'<tr><td>{html.escape(r.label)}</td><td>{r.h} dni</td><td>{r.lag} dni</td><td class="{"pos" if r.r >= 0 else "neg"}">{r.r:+.2f}</td>'
+            out += (f'<tr><td>{html.escape(r.label)}</td><td>{r.h} days</td><td>{r.lag} days</td><td class="{"pos" if r.r >= 0 else "neg"}">{r.r:+.2f}</td>'
                     f'<td>{r.p*100:.1f}%</td><td class="{"pos" if r.r_test >= 0 else "neg"}">{r.r_test:+.2f}</td></tr>')
         return out
-    th = ('<tr><th>Wskaźnik</th><th>Zmiana ceny za</th><th>Wskaźnik sprzed</th><th title="od −1 do +1">Siła powiązania</th>'
-          '<th title="Szansa, że to przypadek, bez uwzględnienia liczby testów (po korekcie byłaby znacznie wyższa)">Szansa przypadku (bez korekty)</th><th title="Siła powiązania w najnowszych danych">W nowszych danych</th></tr>')
+    th = ('<tr><th>Indicator</th><th>Price change over</th><th>Indicator from</th><th title="from −1 to +1">Strength of the link</th>'
+          '<th title="Chance that it is luck, without taking the number of tests into account (after correction it would be much higher)">Chance of luck (uncorrected)</th><th title="Strength of the link in the most recent data">In newer data</th></tr>')
     if len(S["discoveries"]):
         d = f'<table class="tbl">{th}{rows(S["discoveries"])}</table>'
     else:
-        d = ('<p class="muted" style="margin:0">Żadne powiązanie nie przeszło wszystkich trzech sit. To normalny wynik: przy tak szerokim przeszukiwaniu '
-             'większość „odkryć” to przypadek. System szuka dalej przy każdej aktualizacji i da znać, jeśli coś się utrzyma.</p>')
+        d = ('<p class="muted" style="margin:0">No link passed all three filters. That is a normal result: with such a broad search '
+             'most “discoveries” are luck. The system keeps searching with every update and will let you know if something holds up.</p>')
     c = f'<table class="tbl">{th}{rows(S["candidates"])}</table>'
     co = ""
     for df_ in (S["comove_pos"], S["comove_neg"]):
@@ -543,25 +543,25 @@ def scan_html(S):
                    f'<span class="{"g" if r.r >= 0 else "r"}" style="left:{50 if r.r >= 0 else 50 - w:.1f}%;width:{w:.1f}%"></span></div>'
                    f'<div class="sig-v"><b>{r.r:+.2f}</b></div></div>')
     an = analogs_html(S.get("analogs"))
-    return head, an + (f'<div class="two2"><div class="card"><h3 class="ct">Odkrycia, które przeszły wszystkie sita</h3>{d}'
-                  f'<h3 class="ct" style="margin-top:18px">Najciekawsze podejrzenia (nie przeszły sit, ale obserwujemy)</h3>{c}'
-                  f'<p class="muted sm" style="margin-top:8px">Siła powiązania to liczba od −1 do +1 (0 = brak związku). Te podejrzenia utrzymują się w czasie i działają też w nowszych danych, '
-                  f'ale po uwzględnieniu liczby testów nie da się wykluczyć przypadku.</p></div>'
-                  f'<div class="card"><h3 class="ct">Z czym Bitcoin porusza się razem w tym samym tygodniu</h3>'
-                  f'<p class="muted sm" style="margin:0 0 8px">To opis, nie prognoza: plus = rosną razem, minus = w przeciwne strony.</p>{co}</div></div>')
+    return head, an + (f'<div class="two2"><div class="card"><h3 class="ct">Discoveries that passed all the filters</h3>{d}'
+                  f'<h3 class="ct" style="margin-top:18px">Most interesting suspects (did not pass the filters, but we are watching them)</h3>{c}'
+                  f'<p class="muted sm" style="margin-top:8px">The strength of the link is a number from −1 to +1 (0 = no link). These suspects hold up over time and also work in newer data, '
+                  f'but once the number of tests is taken into account, luck cannot be ruled out.</p></div>'
+                  f'<div class="card"><h3 class="ct">What Bitcoin moves together with in the same week</h3>'
+                  f'<p class="muted sm" style="margin:0 0 8px">This is a description, not a forecast: plus = they rise together, minus = they move in opposite directions.</p>{co}</div></div>')
 
 
 def upcoming_html(E):
     rows = ""
     for u in E["upcoming"][:10]:
         h = u["hist"]
-        hist = (f'zwykle po 3 dniach {h["mean_ret"]:+.1f}%, cena rosła w {h["pos"]*100:.0f}% przypadków (na podstawie {h["n"]} podobnych)' if h else "brak historii")
+        hist = (f'usually {h["mean_ret"]:+.1f}% after 3 days, the price rose in {h["pos"]*100:.0f}% of cases (based on {h["n"]} similar ones)' if h else "no history")
         rows += f'<tr><td>{u["date"]}</td><td>{html.escape(u["title"])}</td><td class="muted">{hist}</td></tr>'
-    return f'<table class="tbl"><tr><th>Data</th><th>Wydarzenie</th><th>Jak zwykle reagował Bitcoin</th></tr>{rows}</table>'
+    return f'<table class="tbl"><tr><th>Date</th><th>Event</th><th>How Bitcoin usually reacted</th></tr>{rows}</table>'
 
 
 def touch_html(TC):
-    """Szansa dotknięcia poziomów ceny w 7, 30 i 90 dni oraz test wstecz tej szansy."""
+    """Chance of touching price levels within 7, 30 and 90 days, plus a backtest of that chance."""
     if not TC:
         return ""
     pc = lambda p: "&lt;1%" if p < 0.01 else ("&gt;99%" if p > 0.99 else f"{p * 100:.0f}%")
@@ -569,71 +569,71 @@ def touch_html(TC):
     for r in TC["table"]:
         if abs(r["rel"]) < 0.02:
             continue
-        lab = f'{r["level"] / 1000:.0f} tys. USD'
+        lab = f'{r["level"] / 1000:.0f}k USD'
         rows += (f'<tr><td><b>{lab}</b> <span class="muted sm">({r["rel"] * 100:+.0f}%)</span></td>'
                  + "".join(f'<td>{pc(r[f"p{H}"])}</td>' for H in (7, 30, 90)) + "</tr>")
     c = TC["calib"]
     cr = "".join(f'<tr><td>{x["lo"] * 100:.0f}–{x["hi"] * 100:.0f}%</td><td>{x["pred"] * 100:.0f}%</td><td>{x["real"] * 100:.0f}%</td><td class="muted">{x["n"]}</td></tr>'
                  for x in c["rows"])
     import touch as TO
-    pl = lambda v, d=1: f"{v:+.{d}f}".replace(".", ",")
+    pl = lambda v, d=1: f"{v:+.{d}f}"
     sk = c["skill"] * 100
     side = c.get("side", {})
     best = TC.get("best", "base")
     sidetxt = ""
-    if side:                                            # największy systematyczny błąd wybranego wariantu
+    if side:                                            # the largest systematic error of the chosen variant
         x = max(side, key=lambda k: abs(side[k][0] - side[k][1]))
         p_, r_ = side[x]
         if abs(p_ - r_) > 0.03:
-            co = f'{"wzrost" if float(x) > 0 else "spadek"} o {abs(float(x)) * 100:.0f}% w miesiąc'
-            sidetxt = (f' Największa słabość: {co} model przewidywał średnio na {p_ * 100:.0f}%, a zdarzał się w {r_ * 100:.0f}% miesięcy, '
-                       f'więc tę szansę raczej {"zawyża" if p_ > r_ else "zaniża"}.')
-    var_rows = "".join(f'<tr><td>{"<b>" if m == best else ""}{TO.LABELS[m]}{"</b> (używany)" if m == best else ""}</td>'
+            co = f'a {"rise" if float(x) > 0 else "fall"} of {abs(float(x)) * 100:.0f}% within a month'
+            sidetxt = (f' Biggest weakness: for {co} the model predicted on average {p_ * 100:.0f}%, but it happened in {r_ * 100:.0f}% of months, '
+                       f'so it tends to {"overstate" if p_ > r_ else "understate"} this chance.')
+    var_rows = "".join(f'<tr><td>{"<b>" if m == best else ""}{TO.LABELS[m]}{"</b> (in use)" if m == best else ""}</td>'
                        f'<td class="{"pos" if v["skill"] > 0 else "neg"}">{pl(v["skill"] * 100)}%</td></tr>'
                        for m, v in TC.get("variants", {}).items())
-    drift_note = (' Wybrany wariant zakłada, że trend z ostatnich 4 lat (średni dzienny ruch ceny) się utrzyma, dlatego szanse wzrostów są tu wyższe niż spadków. '
-                  'W teście wstecz to założenie poprawiało trafność, ale Bitcoin przez większość swojej historii mocno rósł, a przyszłość nie musi tego powtórzyć.'
-                  if "drift" in best else ' Kierunek jest neutralny: tak samo prawdopodobny wzrost i spadek o ten sam procent.')
-    decomp = (f' Rozbicie wyniku: model lepiej odróżnia sytuacje ryzykowne od spokojnych (rozdzielczość {c["resolution"]:.4f} wobec {c["resolution_base"]:.4f} '
-              f'dla stałej częstości), a jego szanse są też lepiej dopasowane do rzeczywistości (błąd kalibracji {c["reliability"]:.4f} wobec {c["reliability_base"]:.4f}).'
-              ).replace("0.", "0,") if "resolution" in c else ""
+    drift_note = (' The chosen variant assumes that the trend of the last 4 years (the average daily price move) will continue, which is why the chances of rises are higher here than of falls. '
+                  'In the backtest this assumption improved accuracy, but Bitcoin rose strongly for most of its history, and the future need not repeat that.'
+                  if "drift" in best else ' The direction is neutral: a rise and a fall of the same percentage are equally likely.')
+    decomp = (f' Breaking the result down: the model is better at telling risky situations from calm ones (resolution {c["resolution"]:.4f} vs {c["resolution_base"]:.4f} '
+              f'for the fixed frequency), and its chances also match reality better (calibration error {c["reliability"]:.4f} vs {c["reliability_base"]:.4f}).'
+              ) if "resolution" in c else ""
     hl = TC.get("definition", "close") == "hl"
     od = TC.get("other_definition") or {}
     ob = (od.get("variants") or {}).get(od.get("best"), {})
-    defn = ('Liczymy dotknięcie tak, jak się je rozumie: wystarczy, że cena choć raz w ciągu dnia sięgnie poziomu (najwyższa lub najniższa cena dnia), '
-            'a nie tylko na zamknięcie. Symulacja losuje całe prawdziwe dni z historii, razem z ich zasięgiem w górę i w dół. '
-            if hl else 'Dotknięcie liczymy na zamknięcie dnia (cena o północy UTC); w ciągu dnia cena mogła sięgnąć poziomu częściej. ')
+    defn = ('We count a touch the way people understand it: it is enough for the price to reach the level at least once during the day (the day\'s high or low), '
+            'not only at the close. The simulation draws whole real days from history, including how far they reached up and down. '
+            if hl else 'We count a touch at the daily close (the price at midnight UTC); during the day the price may have reached the level more often. ')
     switch = ""
     if ob:
-        switch = (f'<p class="muted sm" style="margin:8px 0 0">Wybór definicji według reguły spisanej z góry: liczenie po maksimach i minimach dnia zastępuje '
-                  f'liczenie po zamknięciach, jeśli bije stałą częstość i przed odcięciem 29.10.2024, i na egzaminie. '
-                  + (f'Przeszło: przewaga {pl(c["skill_pre"] * 100)}% przed i {pl(c["skill_post"] * 100)}% na egzaminie '
-                     f'(dla porównania liczenie po zamknięciach: {pl(ob.get("skill_pre", 0) * 100)}% i {pl(ob.get("skill_post", 0) * 100)}%).'
-                     if hl else 'Nie przeszło, więc zostajemy przy zamknięciach.') + '</p>')
-    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Jaka jest szansa, że cena dotknie danego poziomu?</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Nie chodzi o to, gdzie cena skończy, tylko czy choć raz dotknie poziomu po drodze. {defn}'
-            f'Liczymy to z 20 000 symulowanych ścieżek ceny przy dzisiejszej zmienności, która z czasem wraca do normy.{drift_note}</p>'
-            + f'<div class="tw"><table class="tbl"><tr><th>Poziom</th><th>W 7 dni</th><th>W 30 dni</th><th>W 90 dni</th></tr>{rows}</table></div>'
-            f'<h3 class="ct" style="margin-top:18px">Czy te szanse się sprawdzały?</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Co tydzień od 2016 roku liczyliśmy szansę dotknięcia poziomów ±10% i ±20% w ciągu 30 dni, znając tylko dane do tego dnia, '
-            f'i sprawdzaliśmy, co się stało ({c["n"]} prób).</p>'
-            f'<div class="tw"><table class="tbl"><tr><th>Gdy model mówił</th><th>Średnio mówił</th><th>Naprawdę się zdarzyło</th><th>Prób</th></tr>{cr}</table></div>'
-            f'<p class="note"><b>Wniosek:</b> w porównaniu ze stałą historyczną częstością (np. „+10% w miesiąc zdarza się w mniej więcej połowie miesięcy”), '
-            f'liczoną tylko z przeszłości, model jest dokładniejszy o {pl(sk)}% (wynik Briera). To niewielka, ale uczciwa przewaga: '
-            f'bierze się z tego, że dzisiejsza zmienność mówi coś o najbliższych tygodniach.{decomp}{sidetxt}</p>{switch}'
-            + (f'<p class="muted sm" style="margin:10px 0 6px">Sprawdziliśmy kilka sposobów symulacji tym samym testem; w tabeli przewaga każdego nad stałą częstością. '
-               f'Wybór najlepszego z kilku na tym samym teście jest lekko optymistyczny, dlatego pokazujemy wszystkie.</p>'
-               f'<div class="tw"><table class="tbl"><tr><th>Sposób symulacji</th><th>Przewaga</th></tr>{var_rows}</table></div>' if var_rows else "")
+        switch = (f'<p class="muted sm" style="margin:8px 0 0">The definition is chosen by a rule written down in advance: counting by daily highs and lows replaces '
+                  f'counting by closes if it beats the fixed frequency both before the Oct 29, 2024 cut-off and on the exam. '
+                  + (f'It passed: an edge of {pl(c["skill_pre"] * 100)}% before and {pl(c["skill_post"] * 100)}% on the exam '
+                     f'(for comparison, counting by closes: {pl(ob.get("skill_pre", 0) * 100)}% and {pl(ob.get("skill_post", 0) * 100)}%).'
+                     if hl else 'It did not pass, so we stay with closes.') + '</p>')
+    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">What is the chance the price will touch a given level?</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">This is not about where the price ends up, but whether it touches the level at least once along the way. {defn}'
+            f'We calculate this from 20,000 simulated price paths, using today\'s volatility, which returns to normal over time.{drift_note}</p>'
+            + f'<div class="tw"><table class="tbl"><tr><th>Level</th><th>Within 7 days</th><th>Within 30 days</th><th>Within 90 days</th></tr>{rows}</table></div>'
+            f'<h3 class="ct" style="margin-top:18px">Did these chances hold up?</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">Every week since 2016 we calculated the chance of touching levels ±10% and ±20% within 30 days, knowing only the data up to that day, '
+            f'and checked what happened ({c["n"]} trials).</p>'
+            f'<div class="tw"><table class="tbl"><tr><th>When the model said</th><th>On average it said</th><th>What actually happened</th><th>Trials</th></tr>{cr}</table></div>'
+            f'<p class="note"><b>Conclusion:</b> compared with the fixed historical frequency (e.g. “+10% within a month happens in roughly half of all months”), '
+            f'calculated only from the past, the model is {pl(sk)}% more accurate (Brier score). It is a small but honest edge: '
+            f'it comes from the fact that today\'s volatility says something about the next few weeks.{decomp}{sidetxt}</p>{switch}'
+            + (f'<p class="muted sm" style="margin:10px 0 6px">We checked several ways of simulating with the same test; the table shows the edge of each over the fixed frequency. '
+               f'Picking the best of several on the same test is slightly optimistic, which is why we show them all.</p>'
+               f'<div class="tw"><table class="tbl"><tr><th>Simulation method</th><th>Edge</th></tr>{var_rows}</table></div>' if var_rows else "")
             + '</div>')
 
 
 def exam_html(ens, TCH=None, SIM=None):
-    """Egzamin na odciętych 2 latach: wybór tylko na danych sprzed odcięcia, jeden sprawdzian na ostatnich 2 latach."""
+    """Exam on the 2 held-out years: choices made only on data before the cut-off, one check on the last 2 years."""
     if not ens:
         return ""
-    pl = lambda v: "–" if v is None or v != v else f"{v * 100:+.1f}%".replace(".", ",")
-    zl = lambda v: f"{v:,.0f} zł".replace(",", " ")
-    lab = lambda m: MODEL_LAB.get(m, "Zespół metod (z bramką)" if m == "ens" else m)
+    pl = lambda v: "–" if v is None or v != v else f"{v * 100:+.1f}%"
+    zl = lambda v: f"{v:,.0f} PLN"
+    lab = lambda m: MODEL_LAB.get(m, "Team of methods (with a gate)" if m == "ens" else m)
     rows, start = "", None
     for H, v in sorted(ens["horizons"].items(), key=lambda a: int(a[0])):
         ho = v.get("holdout") or {}
@@ -643,50 +643,50 @@ def exam_html(ens, TCH=None, SIM=None):
         r = ho["rows"][ho["chosen"]]
         p = r["p_post"]
         vd = ho.get("verdict", "passed" if ho["passed"] else "failed")
-        verdict = {"passed": '<b class="pos">zdany, w prognozie od dziś</b>',
-                   "inconclusive": '<span class="muted">nierozstrzygnięty (za mało niezależnych prób), nie używamy</span>',
-                   "failed": '<span class="muted">nie zdany</span>'}[vd]
+        verdict = {"passed": '<b class="pos">passed, in the forecast from today</b>',
+                   "inconclusive": '<span class="muted">inconclusive (too few independent trials), not used</span>',
+                   "failed": '<span class="muted">failed</span>'}[vd]
         mde = r.get("mde_post")
         neff = r.get("n_eff_post")
-        rows += (f'<tr><td><b>{H} dni</b></td><td>{html.escape(lab(ho["chosen"]))}</td><td>{pl(r["skill_pre"])}</td>'
+        rows += (f'<tr><td><b>{H} days</b></td><td>{html.escape(lab(ho["chosen"]))}</td><td>{pl(r["skill_pre"])}</td>'
                  f'<td class="{"pos" if r["skill_post"] > 0 else "neg"}">{pl(r["skill_post"])}</td>'
-                 f'<td>{"–" if p != p else f"{p:.2f}".replace(".", ",")}</td>'
-                 f'<td>{r["n_post"]}{f" (ok. {neff:.0f} niezależnych)" if neff is not None and neff == neff else ""}</td>'
+                 f'<td>{"–" if p != p else f"{p:.2f}"}</td>'
+                 f'<td>{r["n_post"]}{f" (about {neff:.0f} independent)" if neff is not None and neff == neff else ""}</td>'
                  f'<td>{"–" if mde is None or mde != mde else pl(mde)}</td><td>{verdict}</td></tr>')
-    out = (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Egzamin na ostatnich 2 latach</h3>'
-           f'<p class="muted sm" style="margin:0 0 10px">Odcinamy ostatnie 2 lata (od {start or "2024-10-29"}). Metodę, wariant i strategię wybieramy wyłącznie na danych sprzed tej daty, '
-           f'a potem sprawdzamy je raz na odciętym okresie, którego przy wyborze „nie widziały”. Do prognozy od dziś wchodzi tylko to, co wygrywa z założeniem „bez zmian” '
-           f'zarówno przed odcięciem, jak i na egzaminie, z małą szansą przypadku (p &lt; 0,10). Regułę spisaliśmy przed zobaczeniem wyników. '
-           f'Nie poprawiamy modelu, dopóki egzamin nie wyjdzie dobrze: to byłoby uczenie się na pamięć tych dwóch lat.</p>')
+    out = (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Exam on the last 2 years</h3>'
+           f'<p class="muted sm" style="margin:0 0 10px">We hold out the last 2 years (from {start or "2024-10-29"}). We choose the method, the variant and the strategy using only data from before that date, '
+           f'and then check them once on the held-out period, which they “did not see” while being chosen. Only what beats the “no change” assumption '
+           f'both before the cut-off and on the exam, with a small chance of luck (p &lt; 0.10), enters the forecast from today. We wrote this rule down before seeing the results. '
+           f'We do not tweak the model until the exam comes out well: that would amount to memorising those two years.</p>')
     if rows:
-        out += (f'<h3 class="ct" style="margin-top:6px">Prognoza zakresu ceny</h3>'
-                f'<div class="tw"><table class="tbl"><tr><th>Horyzont</th><th>Wybrana metoda</th><th>Przewaga przed</th><th>Przewaga na egzaminie</th><th>p</th><th>Prób</th><th>Najmniejsza przewaga, którą test by wykrył</th><th>Wynik</th></tr>{rows}</table></div>'
-                f'<p class="muted sm" style="margin:6px 0 0">Na długich horyzontach prognozy z 2 lat mocno się nakładają (dla 180 dni to w praktyce kilka niezależnych okresów). '
-                f'Dlatego przy mniej niż 20 niezależnych próbach piszemy „nierozstrzygnięty”, a nie „nie zdany”, i podajemy, jak dużą przewagę ten egzamin w ogóle mógłby wykryć (w 4 na 5 przypadków). '
-                f'Zasada się nie zmienia: metoda, której nie da się sprawdzić, nie wchodzi do prognozy. Od 30.10.2026 testy liczą też poprawkę na małą liczbę prób (Harvey, Leybourne i Newbold 1997), '
-                f'a horyzonty 1, 3 i 7 dni są sprawdzane każdego dnia zamiast co tydzień.</p>')
+        out += (f'<h3 class="ct" style="margin-top:6px">Forecast of the price range</h3>'
+                f'<div class="tw"><table class="tbl"><tr><th>Horizon</th><th>Chosen method</th><th>Edge before</th><th>Edge on the exam</th><th>p</th><th>Trials</th><th>Smallest edge the test could detect</th><th>Result</th></tr>{rows}</table></div>'
+                f'<p class="muted sm" style="margin:6px 0 0">Over long horizons the forecasts made within 2 years overlap heavily (for 180 days that is in practice only a few independent periods). '
+                f'That is why, with fewer than 20 independent trials, we write “inconclusive” rather than “failed”, and we state how big an edge this exam could detect at all (in 4 cases out of 5). '
+                f'The principle does not change: a method that cannot be checked does not enter the forecast. Since Oct 30, 2026 the tests also include a correction for a small number of trials (Harvey, Leybourne and Newbold 1997), '
+                f'and the 1, 3 and 7-day horizons are checked every day instead of every week.</p>')
     if TCH and TCH.get("variants"):
         import touch as TO
-        tr = "".join(f'<tr><td>{"<b>" if m == TCH["best"] else ""}{TO.LABELS[m]}{" (wybrany)</b>" if m == TCH["best"] else ""}</td>'
+        tr = "".join(f'<tr><td>{"<b>" if m == TCH["best"] else ""}{TO.LABELS[m]}{" (chosen)</b>" if m == TCH["best"] else ""}</td>'
                      f'<td>{pl(v.get("skill_pre"))}</td><td class="{"pos" if (v.get("skill_post") or 0) > 0 else "neg"}">{pl(v.get("skill_post"))}</td></tr>'
                      for m, v in TCH["variants"].items())
-        out += (f'<h3 class="ct" style="margin-top:18px">Szanse dotknięcia poziomów</h3>'
-                f'<div class="tw"><table class="tbl"><tr><th>Wariant</th><th>Przewaga przed</th><th>Przewaga na egzaminie</th></tr>{tr}</table></div>')
+        out += (f'<h3 class="ct" style="margin-top:18px">Chances of touching levels</h3>'
+                f'<div class="tw"><table class="tbl"><tr><th>Variant</th><th>Edge before</th><th>Edge on the exam</th></tr>{tr}</table></div>')
     ex = ((SIM or {}).get("backtest") or {}).get("exam")
     if ex:
         a, d = ex["active"], ex["dca"]
-        out += (f'<h3 class="ct" style="margin-top:18px">Wirtualny portfel</h3>'
-                f'<div class="tw"><table class="tbl"><tr><th>Od {ex["start"]}, wpłaty {zl(a["deposited"])}</th><th>Aktywny portfel</th><th>Regularne kupowanie</th></tr>'
-                f'<tr><td>Wartość dziś</td><td><b>{zl(a["final"])}</b></td><td>{zl(d["final"])}</td></tr>'
-                f'<tr><td>Roczny zwrot (bez wpływu wpłat)</td><td><b>{pl(a["twr_ann"])}</b></td><td>{pl(d["twr_ann"])}</td></tr>'
-                f'<tr><td>Największy spadek po drodze</td><td><b>{pl(a["max_dd"])}</b></td><td>{pl(d["max_dd"])}</td></tr></table></div>'
-                f'<p class="muted sm" style="margin:6px 0 0">Zastrzeżenie: regułę trendu potwierdziliśmy testem H7 na całej historii, łącznie z tymi 2 latami, więc dla portfela nie jest to w pełni czysty egzamin. '
-                f'Czysty sprawdzian to portfel na żywo, prowadzony od 28 października 2026.</p>')
+        out += (f'<h3 class="ct" style="margin-top:18px">Virtual portfolio</h3>'
+                f'<div class="tw"><table class="tbl"><tr><th>From {ex["start"]}, deposits {zl(a["deposited"])}</th><th>Active portfolio</th><th>Regular buying</th></tr>'
+                f'<tr><td>Value today</td><td><b>{zl(a["final"])}</b></td><td>{zl(d["final"])}</td></tr>'
+                f'<tr><td>Annual return (excluding the effect of deposits)</td><td><b>{pl(a["twr_ann"])}</b></td><td>{pl(d["twr_ann"])}</td></tr>'
+                f'<tr><td>Biggest drop along the way</td><td><b>{pl(a["max_dd"])}</b></td><td>{pl(d["max_dd"])}</td></tr></table></div>'
+                f'<p class="muted sm" style="margin:6px 0 0">Caveat: we confirmed the trend rule with test H7 on the whole history, including these 2 years, so for the portfolio this is not a fully clean exam. '
+                f'The clean check is the live portfolio, run since Oct 28, 2026.</p>')
     return out + "</div>"
 
 
 def short_html(ens):
-    """Krótkie horyzonty (1 i 3 dni): setki razy więcej niezależnych prób, więc słaba przewaga ma szansę wyjść w teście."""
+    """Short horizons (1 and 3 days): hundreds of times more independent trials, so a weak edge has a chance to show up in the test."""
     sh = (ens or {}).get("short")
     if not sh:
         return ""
@@ -697,82 +697,82 @@ def short_html(ens):
         e = tb.get("ens", {})
         pv = best.get("dm_p")
         sig = (pv is not None and pv == pv and pv < 0.05)
-        rows += (f'<tr><td><b>{H} {"dzień" if H == 1 else "dni"}</b></td><td>{v["n"]}</td><td>{html.escape(best["label"])}</td>'
+        rows += (f'<tr><td><b>{H} {"day" if H == 1 else "days"}</b></td><td>{v["n"]}</td><td>{html.escape(best["label"])}</td>'
                  f'<td class="{"pos" if best["skill"] > 0 else "neg"}">{best["skill"] * 100:+.2f}%</td>'
-                 f'<td class="{"pos" if sig else "muted"}">{"tak" if sig else "nie"} (p = {pv:.2f})</td>'
-                 f'<td>{e.get("cover80", 0) * 100:.0f}%</td></tr>').replace(".", ",").replace("<td>,", "<td>")
-    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">A na krótkim dystansie: 1 i 3 dni?</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Im krótszy horyzont, tym więcej niezależnych prób w historii, więc tym łatwiej wykryć nawet małą przewagę. '
-            f'Sprawdzamy tu najlepszą metodę na tle założenia „bez zmian”. Te horyzonty nie trafiają do głównej prognozy, dopóki przewaga nie jest istotna.</p>'
-            f'<div class="tw"><table class="tbl"><tr><th>Horyzont</th><th>Prób</th><th>Najlepsza metoda</th><th>Przewaga</th><th>Istotna?</th><th>W paśmie 80%</th></tr>{rows}</table></div></div>')
+                 f'<td class="{"pos" if sig else "muted"}">{"yes" if sig else "no"} (p = {pv:.2f})</td>'
+                 f'<td>{e.get("cover80", 0) * 100:.0f}%</td></tr>')
+    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">And over the short run: 1 and 3 days?</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">The shorter the horizon, the more independent trials there are in history, so the easier it is to detect even a small edge. '
+            f'Here we check the best method against the “no change” assumption. These horizons do not go into the main forecast until the edge is significant.</p>'
+            f'<div class="tw"><table class="tbl"><tr><th>Horizon</th><th>Trials</th><th>Best method</th><th>Edge</th><th>Significant?</th><th>Within the 80% band</th></tr>{rows}</table></div></div>')
 
 
 def dirtrack_html(DT):
-    """Osobny tor kierunku: szansa wzrostu w 7 dni z potwierdzonych sygnałów, oceniana tylko wynikiem Briera."""
+    """Separate direction track: chance of a rise within 7 days from confirmed signals, judged only by the Brier score."""
     if not DT or not DT.get("eval"):
         return ""
     pl = lambda v: f"{v * 100:+.2f}%"
     pc = lambda v: f"{v * 100:.0f}%"
     rows = "".join(f'<tr><td>{lab}</td><td>{e["n"]}</td><td>{pc(e["up_rate"])}</td><td>{pc(e["hit"])}</td>'
                    f'<td class="{"pos" if e["skill"] > 0 and e["p"] < 0.10 else "muted"}">{pl(e["skill"])}</td><td>{e["p"]:.2f}</td></tr>'
-                   for k, lab in (("przed", "przed 29.10.2024"), ("po", "egzamin: od 29.10.2024")) if (e := DT["eval"].get(k)))
-    now = (f' Dzisiejszy odczyt tego toru: {pc(DT["p_now"])} szans na wzrost w 7 dni (stała częstość: {pc(DT["clim_now"])}).' if DT.get("p_now") is not None else "")
-    verdict = ("Tor przeszedł test, więc jego szansa zastępuje na panelu 50%." if DT["passed"] else
-               "Tor nie przeszedł testu: jego przewaga nad stałą częstością wzrostów jest za mała, by odróżnić ją od przypadku. Dlatego na panelu nadal podajemy 50/50.")
-    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Osobny tor kierunku: czy za tydzień będzie drożej?</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Główny test ocenia cały przedział cen, a słaby sygnał kierunku przesuwa go tak mało, że testu nie może zdać. '
-            f'Tu sprawdzamy tylko jedno pytanie: wzrost czy spadek za 7 dni. Szansę liczy prosty model z potwierdzonych sygnałów (trend), uczony co tydzień tylko na przeszłości. '
-            f'Rywal to stała częstość wzrostów z historii. Reguła spisana 31.10.2026: tor zastępuje 50% tylko, jeśli jest od rywala lepszy z p &lt; 0,10 i przed odcięciem, i na egzaminie.</p>'
-            f'<div class="tw"><table class="tbl"><tr><th>Okres</th><th>Dni</th><th>Tygodnie wzrostowe</th><th>Trafiony kierunek</th><th>Przewaga (Brier)</th><th>p</th></tr>{rows}</table></div>'
-            f'<p class="note"><b>Wniosek:</b> {verdict}{now}</p></div>')
+                   for k, lab in (("przed", "before Oct 29, 2024"), ("po", "exam: from Oct 29, 2024")) if (e := DT["eval"].get(k)))
+    now = (f' Today\'s reading of this track: {pc(DT["p_now"])} chance of a rise within 7 days (fixed frequency: {pc(DT["clim_now"])}).' if DT.get("p_now") is not None else "")
+    verdict = ("The track passed the test, so its chance replaces the 50% on the panel." if DT["passed"] else
+               "The track did not pass the test: its edge over the fixed frequency of rises is too small to tell apart from luck. That is why the panel still shows 50/50.")
+    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Separate direction track: will the price be higher in a week?</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">The main test judges the whole price range, and a weak direction signal moves it so little that it cannot pass the test. '
+            f'Here we check only one question: a rise or a fall in 7 days. The chance is calculated by a simple model from confirmed signals (trend), trained every week on past data only. '
+            f'The rival is the fixed frequency of rises from history. Rule written down on Oct 31, 2026: the track replaces the 50% only if it beats the rival with p &lt; 0.10 both before the cut-off and on the exam.</p>'
+            f'<div class="tw"><table class="tbl"><tr><th>Period</th><th>Days</th><th>Rising weeks</th><th>Direction right</th><th>Edge (Brier)</th><th>p</th></tr>{rows}</table></div>'
+            f'<p class="note"><b>Conclusion:</b> {verdict}{now}</p></div>')
 
 
 def judge_html(JD):
-    """Sędzia z rynków zakładów: nasze szanse dotknięcia kontra ceny na Polymarket (wstecz) i Kalshi (na żywo)."""
+    """Judge from betting markets: our touch chances versus prices on Polymarket (backtest) and Kalshi (live)."""
     if not JD:
         return ""
     pc = lambda v: "–" if v is None or v != v else f"{v * 100:.0f}%"
     f3 = lambda v: "–" if v is None or v != v else f"{v:.3f}"
-    out = ('<div class="panel" style="margin-top:18px"><h3 class="ct">Kto lepiej zgaduje dotknięcia: my czy rynek zakładów?</h3>'
-           '<p class="muted sm" style="margin:0 0 10px">Na giełdach przewidywań (Polymarket, Kalshi) ludzie stawiają prawdziwe pieniądze na to, czy bitcoin dotknie danej ceny do końca miesiąca. '
-           'Cena takiego zakładu to szansa w oczach rynku. Porównujemy ją z naszą, policzoną z danych z tego samego dnia, i z tym, co się stało '
-           '(wynik Briera: im niżej, tym lepiej; zgadywanie 50/50 daje 0,25).</p>')
+    out = ('<div class="panel" style="margin-top:18px"><h3 class="ct">Who is better at guessing touches: us or the betting market?</h3>'
+           '<p class="muted sm" style="margin:0 0 10px">On prediction markets (Polymarket, Kalshi) people bet real money on whether bitcoin will touch a given price by the end of the month. '
+           'The price of such a bet is the chance in the eyes of the market. We compare it with ours, calculated from data of the same day, and with what actually happened '
+           '(Brier score: the lower, the better; guessing 50/50 gives 0.25).</p>')
     P = (JD.get("poly") or {}).get("eval") or {}
     if P:
-        rows = "".join(f'<tr><td>{lab}</td><td>{e["n"]} ({e["months"]} mies.)</td><td>{f3(e["brier_model"])}</td><td>{f3(e["brier_market"])}</td><td>{f3(e["brier_blend"])}</td></tr>'
-                       for k, lab in (("przed", "przed 29.10.2024"), ("po", "egzamin: od 29.10.2024"), ("calosc", "razem")) if (e := P.get(k)))
+        rows = "".join(f'<tr><td>{lab}</td><td>{e["n"]} ({e["months"]} months)</td><td>{f3(e["brier_model"])}</td><td>{f3(e["brier_market"])}</td><td>{f3(e["brier_blend"])}</td></tr>'
+                       for k, lab in (("przed", "before Oct 29, 2024"), ("po", "exam: from Oct 29, 2024"), ("calosc", "all")) if (e := P.get(k)))
         c = P.get("calosc") or {}
         better = c and c["brier_market"] < c["brier_model"]
-        out += (f'<div class="tw"><table class="tbl"><tr><th>Polymarket, rozstrzygnięte rynki</th><th>Rynków</th><th>Nasz model</th><th>Rynek</th><th>Pół na pół</th></tr>{rows}</table></div>'
-                + (f'<p class="note"><b>Wniosek:</b> rynek zakładów zgaduje dotknięcia lepiej niż nasz model, szczególnie w ostatnich 2 latach. '
-                   f'Jeśli chcesz wiedzieć, czy cena dotknie konkretnego poziomu do końca miesiąca, cena na Polymarket jest lepszym drogowskazem niż nasza tabela; '
-                   f'naszą traktuj jako punkt odniesienia. Rynki z jednego miesiąca dzielą tę samą ścieżkę ceny, więc niezależnych porównań jest tyle, ile miesięcy.</p>'
-                   if better else '<p class="note"><b>Wniosek:</b> nasz model radzi sobie nie gorzej niż rynek zakładów; przy tak małej liczbie miesięcy to jeszcze nie dowód.</p>'))
+        out += (f'<div class="tw"><table class="tbl"><tr><th>Polymarket, settled markets</th><th>Markets</th><th>Our model</th><th>Market</th><th>Half and half</th></tr>{rows}</table></div>'
+                + (f'<p class="note"><b>Conclusion:</b> the betting market guesses touches better than our model, especially over the last 2 years. '
+                   f'If you want to know whether the price will touch a specific level by the end of the month, the Polymarket price is a better guide than our table; '
+                   f'treat ours as a reference point. Markets from the same month share the same price path, so there are only as many independent comparisons as there are months.</p>'
+                   if better else '<p class="note"><b>Conclusion:</b> our model does no worse than the betting market; with so few months this is not proof yet.</p>'))
     K = JD.get("kalshi") or {}
     if K.get("now"):
-        kr = "".join(f'<tr><td>{"powyżej" if r["up"] else "poniżej"} {r["strike"] / 1000:.1f} tys. USD</td><td>do {r["close"]}</td><td>{pc(r["p_market"])}</td><td>{pc(r["p_model"])}</td></tr>'
+        kr = "".join(f'<tr><td>{"above" if r["up"] else "below"} {r["strike"] / 1000:.1f}k USD</td><td>by {r["close"]}</td><td>{pc(r["p_market"])}</td><td>{pc(r["p_model"])}</td></tr>'
                      for r in K["now"])
-        out += (f'<h3 class="ct" style="margin-top:18px">Teraz: Kalshi kontra nasz model</h3>'
-                f'<p class="muted sm" style="margin:0 0 10px">Odczyt z {K.get("now_asof", "")}: ceny z chwili zapisu, nasza szansa z zamknięcia tego dnia. Zapisujemy je co 6 godzin i rozliczamy po zamknięciu rynków '
-                f'(zapisanych: {K["rows"]}, rozliczonych: {K["resolved"]}).</p>'
-                f'<div class="tw"><table class="tbl"><tr><th>Czy cena będzie choć raz</th><th>Termin</th><th>Rynek Kalshi</th><th>Nasz model</th></tr>{kr}</table></div>')
+        out += (f'<h3 class="ct" style="margin-top:18px">Right now: Kalshi versus our model</h3>'
+                f'<p class="muted sm" style="margin:0 0 10px">Reading from {K.get("now_asof", "")}: prices at the moment of recording, our chance from that day\'s close. We record them every 6 hours and settle them after the markets close '
+                f'(recorded: {K["rows"]}, settled: {K["resolved"]}).</p>'
+                f'<div class="tw"><table class="tbl"><tr><th>Will the price at least once be</th><th>Deadline</th><th>Kalshi market</th><th>Our model</th></tr>{kr}</table></div>')
     return out + '</div>'
 
 
 def volev_html(VE):
-    """Spokojnie czy burzliwie: szanse zdarzeń zmienności i ich rozliczenie."""
+    """Calm or stormy: chances of volatility events and how they were settled."""
     if not VE:
         return ""
     pc = lambda v: f"{v * 100:.0f}%"
-    pl = lambda v: f"{v * 100:+.1f}%".replace(".", ",")
+    pl = lambda v: f"{v * 100:+.1f}%"
     tiles, rows = "", ""
     for k, v in VE.items():
         if v.get("p_now") is None:
             continue
         e = v["eval"]
-        badge = "przewaga potwierdzona" if v["confirmed"] else "bez potwierdzonej przewagi"
+        badge = "edge confirmed" if v["confirmed"] else "no confirmed edge"
         tiles += (f'<div class="card tile"><span class="muted sm">{html.escape(v["q"])}</span><b>{pc(v["p_now"])}</b>'
-                  f'<span class="muted sm">zwykle: {pc(v["base_rate"])} · {badge}</span></div>')
+                  f'<span class="muted sm">usually: {pc(v["base_rate"])} · {badge}</span></div>')
         rows += (f'<tr><td>{html.escape(v["label"])}</td><td>{pl(e["przed"]["skill_pers"])}</td><td>{pl(e["po"]["skill_pers"])}</td>'
                  f'<td>{pl(e["calosc"]["skill_clim"])}</td><td class="muted">{e["calosc"]["n"]}</td></tr>')
     rel = (VE.get("burza7") or {}).get("reliability") or []
@@ -780,48 +780,50 @@ def volev_html(VE):
     hi = [r for r in rel if r["lo"] >= 0.6]
     if hi:
         r = hi[0]
-        reltxt = (f' Jedna słabość: przy wysokich szansach model bywa zbyt ostrożny. Gdy mówił średnio {pc(r["pred"])} burzliwego tygodnia, '
-                  f'burzliwy był w {pc(r["real"])} przypadków.') if r["real"] - r["pred"] > 0.05 else ""
-    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Spokojnie czy burzliwie?</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Kierunku ceny nie umiemy przewidzieć, ale to, czy nadchodzą duże wahania, już tak. '
-            f'„Burzliwy tydzień” to tydzień, w którym wahania są większe niż ich mediana z ostatniego roku. Szanse liczy prosty model z dzisiejszej prognozy zmienności, '
-            f'uczony co tydzień tylko na przeszłości.</p><div class="tiles3">{tiles}</div>'
-            f'<div class="tw" style="margin-top:12px"><table class="tbl"><tr><th>Zdarzenie</th><th>Lepszy od „jak ostatnio”: przed 29.10.2024</th>'
-            f'<th>…na egzaminie (ostatnie 2 lata)</th><th>Lepszy od stałej częstości (cała historia)</th><th>Prób</th></tr>{rows}</table></div>'
-            f'<p class="note"><b>Jak to czytać:</b> „jak ostatnio” to uczciwy rywal: zakłada, że jeśli ostatni okres był burzliwy, następny też będzie. '
-            f'„Przewaga potwierdzona” znaczy, że model był od niego lepszy (wynik Briera) i przed odcięciem, i na egzaminie; tę regułę spisaliśmy przed zobaczeniem wyników.{reltxt}</p></div>')
+        reltxt = (f' One weakness: at high chances the model tends to be too cautious. When it said on average {pc(r["pred"])} for a stormy week, '
+                  f'the week was stormy in {pc(r["real"])} of cases.') if r["real"] - r["pred"] > 0.05 else ""
+    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Calm or stormy?</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">We cannot predict the direction of the price, but we can predict whether big swings are coming. '
+            f'A “stormy week” is a week in which the swings are bigger than their median over the last year. The chances are calculated by a simple model from today\'s volatility forecast, '
+            f'trained every week on past data only.</p><div class="tiles3">{tiles}</div>'
+            f'<div class="tw" style="margin-top:12px"><table class="tbl"><tr><th>Event</th><th>Better than “same as last time”: before Oct 29, 2024</th>'
+            f'<th>…on the exam (last 2 years)</th><th>Better than the fixed frequency (whole history)</th><th>Trials</th></tr>{rows}</table></div>'
+            f'<p class="note"><b>How to read this:</b> “same as last time” is a fair rival: it assumes that if the last period was stormy, the next one will be too. '
+            f'“Edge confirmed” means the model beat it (Brier score) both before the cut-off and on the exam; we wrote this rule down before seeing the results.{reltxt}</p></div>')
 
 
 def bands_html(ens):
-    """Czy pasma pasują do stanu rynku: test skalowania i pokrycie w spokojnych, przeciętnych i burzliwych okresach."""
+    """Do the bands fit the state of the market: scaling test and coverage in calm, average and stormy periods."""
     if not ens:
         return ""
-    pl = lambda v: "–" if v is None or v != v else f"{v * 100:+.1f}%".replace(".", ",")
+    pl = lambda v: "–" if v is None or v != v else f"{v * 100:+.1f}%"
     pc = lambda v: f"{v * 100:.0f}%"
+    # market-state labels come from ensemble.py; accept both the Polish and the English names
+    states = (("spokojnie", "calm"), ("przeciętnie", "average"), ("burzliwie", "stormy"))
     rows = ""
     for H, v in sorted(ens["horizons"].items(), key=lambda a: int(a[0])):
         st, au = v.get("scale_test") or {}, v.get("audit") or {}
         if not st or "skill_pre" not in st:
             continue
-        cov = " / ".join(pc(au[k]["cov80"]) if k in au else "–" for k in ("spokojnie", "przeciętnie", "burzliwie"))
-        rows += (f'<tr><td><b>{H} dni</b></td><td class="{"pos" if st["used"] else "muted"}">{"tak" if st["used"] else "nie"}</td>'
+        cov = " / ".join(next((pc(au[k]["cov80"]) for k in ks if k in au), "–") for ks in states)
+        rows += (f'<tr><td><b>{H} days</b></td><td class="{"pos" if st["used"] else "muted"}">{"yes" if st["used"] else "no"}</td>'
                  f'<td>{pl(st["skill_pre"])}</td><td>{pl(st["skill_post"])}</td><td>{cov}</td></tr>')
-    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Czy pasma pasują do stanu rynku?</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Po spokojnym okresie wahania zwykle wracają, a po burzliwym cichną. Proste przeliczenie dzisiejszej zmienności '
-            f'na dłuższy okres tego nie uwzględnia, więc pasma bywały za wąskie w spokoju i za szerokie po burzy. Nowe przeliczenie zakłada, że zmienność wraca do swojej '
-            f'normy z ostatnich 2 lat. Włączamy je na danym horyzoncie tylko, jeśli poprawiło prognozę przed 29.10.2024 (z małą szansą przypadku) i nadal poprawia na egzaminie.</p>'
-            f'<div class="tw"><table class="tbl"><tr><th>Horyzont</th><th>Nowe przeliczenie</th><th>Poprawa przed</th><th>Poprawa na egzaminie</th>'
-            f'<th>Cena w paśmie 80%: spokojnie / przeciętnie / burzliwie</th></tr>{rows}</table></div>'
-            f'<p class="muted sm" style="margin:6px 0 0">Ostatnia kolumna to rozliczenie końcowych pasm od ok. 2015 roku w trzech stanach rynku (tercyle zmienności z ostatnich 3 lat). '
-            f'Cel: około 80% w każdym. Wyraźnie mniej w spokojnych okresach znaczy, że wtedy pasma nadal bywają za wąskie: po długiej ciszy łatwo o niespodziankę.</p>'
+    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Do the bands fit the state of the market?</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">After a calm period swings usually come back, and after a stormy one they die down. Simply scaling today\'s volatility '
+            f'to a longer period does not take this into account, so the bands used to be too narrow in calm times and too wide after a storm. The new scaling assumes that volatility returns to its '
+            f'norm of the last 2 years. We switch it on for a given horizon only if it improved the forecast before Oct 29, 2024 (with a small chance of luck) and still improves it on the exam.</p>'
+            f'<div class="tw"><table class="tbl"><tr><th>Horizon</th><th>New scaling</th><th>Improvement before</th><th>Improvement on the exam</th>'
+            f'<th>Price within the 80% band: calm / average / stormy</th></tr>{rows}</table></div>'
+            f'<p class="muted sm" style="margin:6px 0 0">The last column settles the final bands since about 2015 in three market states (volatility terciles from the last 3 years). '
+            f'Target: about 80% in each. Clearly less in calm periods means the bands are still sometimes too narrow then: after a long quiet spell a surprise comes easily.</p>'
             + rv_race_html(ens) + '</div>')
 
 
 def rv_race_html(ens):
-    """Wyścig zmienności z danych 5-minutowych (HAR-RV, HARQ) oceniany na końcowych pasmach 1, 3 i 7 dni."""
+    """Volatility race on 5-minute data (HAR-RV, HARQ), judged on the final 1, 3 and 7-day bands."""
     allh = {**{int(k): v for k, v in (ens.get("short") or {}).items()}, **{int(k): v for k, v in ens["horizons"].items()}}
     pl = lambda v: "–" if v is None or v != v else f"{v * 100:+.1f}%"
-    hn = lambda H: f'{H} {"dzień" if H == 1 else "dni"}'
+    hn = lambda H: f'{H} {"day" if H == 1 else "days"}'
     rows, frm, used = "", None, []
     for H in (1, 3, 7):
         rc = (allh.get(H) or {}).get("rv_race") or {}
@@ -834,42 +836,42 @@ def rv_race_html(ens):
             c = rc["cand"].get(k)
             if c:
                 rows += (f'<tr><td><b>{hn(H)}</b></td><td>{lab}</td><td>{pl(c["skill_pre"])} <span class="muted sm">(p {c["p_pre"]:.2f})</span></td>'
-                         f'<td>{pl(c["skill_post"])}</td><td class="{"pos" if c["passed"] else "muted"}">{"tak" if c["passed"] else "nie"}</td></tr>')
+                         f'<td>{pl(c["skill_post"])}</td><td class="{"pos" if c["passed"] else "muted"}">{"yes" if c["passed"] else "no"}</td></tr>')
     if not rows:
         return ""
-    verdict = (f"Zmienność z danych co 5 minut wygrała na horyzoncie: {', '.join(used)}, więc tam pasma liczymy z niej." if used else
-               "Żaden z kandydatów nie spełnił reguły, więc pasma liczymy po staremu.")
-    return (f'<h3 class="ct" style="margin-top:18px">Wyścig: zmienność z danych co 5 minut</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Dwa modele uczą się z wahań notowanych co 5 minut na Binance: HAR-RV (dzienne, tygodniowe i miesięczne wahania) '
-            f'i HARQ, który mniej ufa wczorajszemu pomiarowi, gdy był on niepewny. Oba uczą się od nowa co rok, tylko na tym, co już było wiadomo. '
-            f'Sędzią jest trafność końcowego pasma cen (strata pinball), liczona na tych samych dniach co obecna metoda, od {frm}. '
-            f'Reguła spisana 31.10.2026: kandydat zastępuje obecną skalę, jeśli był lepszy przed 29.10.2024 (p &lt; 0,10) i nadal jest lepszy na egzaminie.</p>'
-            f'<div class="tw"><table class="tbl"><tr><th>Horyzont</th><th>Model</th><th>Poprawa przed</th><th>Poprawa na egzaminie</th><th>Wchodzi?</th></tr>{rows}</table></div>'
-            f'<p class="note"><b>Wniosek:</b> {verdict}</p>')
+    verdict = (f"Volatility from 5-minute data won on these horizons: {', '.join(used)}, so that is where we calculate the bands from it." if used else
+               "None of the candidates met the rule, so we calculate the bands the old way.")
+    return (f'<h3 class="ct" style="margin-top:18px">Race: volatility from 5-minute data</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">Two models learn from swings recorded every 5 minutes on Binance: HAR-RV (daily, weekly and monthly swings) '
+            f'and HARQ, which trusts yesterday\'s measurement less when it was uncertain. Both are retrained every year, only on what was already known. '
+            f'The judge is the accuracy of the final price band (pinball loss), calculated on the same days as the current method, from {frm}. '
+            f'Rule written down on Oct 31, 2026: a candidate replaces the current scale if it was better before Oct 29, 2024 (p &lt; 0.10) and is still better on the exam.</p>'
+            f'<div class="tw"><table class="tbl"><tr><th>Horizon</th><th>Model</th><th>Improvement before</th><th>Improvement on the exam</th><th>Goes in?</th></tr>{rows}</table></div>'
+            f'<p class="note"><b>Conclusion:</b> {verdict}</p>')
 
 
 def ledger_html(ens):
-    """Dziennik każdej metody na żywo (od 30.10.2026): jedyny w pełni czysty test."""
+    """Live log of every method (since Oct 30, 2026): the only fully clean test."""
     LD = (ens or {}).get("ledger")
     if not LD:
         return ""
-    head = (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Dziennik wszystkich metod na żywo</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Od {LD["first"]} codziennie zapisujemy prognozę każdej metody na każdy horyzont, z numerem wersji programu, '
-            f'i nigdy jej nie zmieniamy. Po terminie dopisujemy tylko, co się stało. To jedyny test, w którym żadna prognoza nie mogła „widzieć” przyszłości, '
-            f'bo powstała, zanim przyszłość się wydarzyła. Zapisanych prognoz: {LD["rows"]}, rozliczonych: {LD["matured"]}.</p>')
+    head = (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Live log of all methods</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">Since {LD["first"]} we record the forecast of every method for every horizon each day, with the program version number, '
+            f'and we never change it. After the deadline we only add what actually happened. This is the only test in which no forecast could have “seen” the future, '
+            f'because it was made before the future happened. Forecasts recorded: {LD["rows"]}, settled: {LD["matured"]}.</p>')
     by = [b for b in LD.get("by", []) if b["n"] >= 10]
     if not by:
-        return head + '<p class="muted sm" style="margin:0">Pierwsze rozliczenia pojawią się, gdy minie termin co najmniej 10 prognoz danej metody (dla 1 dnia: za ok. 2 tygodnie).</p></div>'
-    lab = lambda m: MODEL_LAB.get(m, {"published": "Opublikowana prognoza"}.get(m, m))
-    pl = lambda v: "–" if v is None or v != v else f"{v * 100:+.1f}%".replace(".", ",")
-    rows = "".join(f'<tr><td>{b["horizon"]} dni</td><td>{html.escape(lab(b["model"]))}</td><td>{b["n"]}</td><td>{b["cov80"] * 100:.0f}%</td><td>{pl(b["skill"])}</td></tr>'
+        return head + '<p class="muted sm" style="margin:0">The first results will appear once at least 10 forecasts of a given method have reached their deadline (for 1 day: in about 2 weeks).</p></div>'
+    lab = lambda m: MODEL_LAB.get(m, {"published": "Published forecast"}.get(m, m))
+    pl = lambda v: "–" if v is None or v != v else f"{v * 100:+.1f}%"
+    rows = "".join(f'<tr><td>{b["horizon"]} days</td><td>{html.escape(lab(b["model"]))}</td><td>{b["n"]}</td><td>{b["cov80"] * 100:.0f}%</td><td>{pl(b["skill"])}</td></tr>'
                    for b in sorted(by, key=lambda b: (b["horizon"], b["model"])))
-    return head + (f'<div class="tw"><table class="tbl"><tr><th>Horyzont</th><th>Metoda</th><th>Rozliczonych</th><th>Cena w paśmie 80%</th>'
-                   f'<th>Przewaga nad „bez zmian”</th></tr>{rows}</table></div></div>')
+    return head + (f'<div class="tw"><table class="tbl"><tr><th>Horizon</th><th>Method</th><th>Settled</th><th>Price within the 80% band</th>'
+                   f'<th>Edge over “no change”</th></tr>{rows}</table></div></div>')
 
 
 def history_track_html(ens):
-    """Rozliczenie na historii: tysiące prognoz z testu walk-forward (model zna tylko przeszłość w dniu prognozy)."""
+    """Settling on history: thousands of forecasts from the walk-forward test (the model only knows the past on the day of the forecast)."""
     if not ens:
         return ""
     rows = ""
@@ -881,38 +883,38 @@ def history_track_html(ens):
         sk = e["skill"] * 100
         cls = lambda x, t: "pos" if abs(x - t) <= 4 else "neg"
         a = v.get("aci") or {}
-        atxt = (f'tak (było {a["cov80_before"] * 100:.0f}% / {a["cov90_before"] * 100:.0f}%)' if a.get("used") else "nie") if a else "–"
-        rows += (f'<tr><td><b>{H} dni</b></td><td>{v["n"]}</td><td class="{cls(c80, 80)}">{c80:.0f}%</td><td class="{cls(c90, 90)}">{c90:.0f}%</td>'
+        atxt = (f'yes (was {a["cov80_before"] * 100:.0f}% / {a["cov90_before"] * 100:.0f}%)' if a.get("used") else "no") if a else "–"
+        rows += (f'<tr><td><b>{H} days</b></td><td>{v["n"]}</td><td class="{cls(c80, 80)}">{c80:.0f}%</td><td class="{cls(c90, 90)}">{c90:.0f}%</td>'
                  f'<td class="{"pos" if sk > 0.5 else "muted"}">{sk:+.1f}%</td><td class="muted">{atxt}</td></tr>')
-    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Rozliczenie na historii: czy pasma mówią prawdę?</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Dla każdego tygodnia od ok. 2015 roku model zrobił prognozę, znając tylko dane do tego dnia, '
-            f'a potem porównaliśmy ją z tym, co się stało. Uczciwy model powinien mieć cenę w paśmie 80% w ok. 80% przypadków i w paśmie 90% w ok. 90%. '
-            f'Kolumna „Przewaga” mówi, o ile cały zespół metod jest lepszy od samego założenia „bez zmian, typowe wahania” (0% = tak samo dobry). '
-            f'Ostatnia: czy używamy adaptacyjnych pasm (ACI), które same się poszerzają, gdy cena ostatnio częściej z nich wypadała. '
-            f'Włączamy je tylko tam, gdzie poprawiają zgodność pasm z rzeczywistością.</p>'
-            f'<div class="tw"><table class="tbl"><tr><th>Horyzont</th><th>Prognoz</th><th>W paśmie 80%</th><th>W paśmie 90%</th><th>Przewaga nad „bez zmian”</th><th>Pasma adaptacyjne</th></tr>{rows}</table></div></div>')
+    return (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Settling on history: do the bands tell the truth?</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">For every week since about 2015 the model made a forecast knowing only the data up to that day, '
+            f'and then we compared it with what actually happened. An honest model should have the price within the 80% band in about 80% of cases and within the 90% band in about 90%. '
+            f'The “Edge” column shows how much better the whole team of methods is than the plain assumption “no change, typical swings” (0% = just as good). '
+            f'The last one: whether we use adaptive bands (ACI), which widen by themselves when the price has recently fallen outside them more often. '
+            f'We switch them on only where they make the bands match reality better.</p>'
+            f'<div class="tw"><table class="tbl"><tr><th>Horizon</th><th>Forecasts</th><th>Within the 80% band</th><th>Within the 90% band</th><th>Edge over “no change”</th><th>Adaptive bands</th></tr>{rows}</table></div></div>')
 
 
 def track_html(stats, ens=None):
     hist = history_track_html(ens) + ledger_html(ens)
     if not stats:
-        return ('<div class="card empty"><b>Dziennik prognoz dopiero się zapełnia</b>'
-                '<p class="muted">Każdą prognozę zapisujemy, a gdy minie jej termin, porównujemy z prawdziwą ceną. '
-                'Pierwsze oceny pojawią się po tygodniu od uruchomienia systemu.</p></div>' + hist)
+        return ('<div class="card empty"><b>The forecast log is still filling up</b>'
+                '<p class="muted">We record every forecast, and once its deadline passes we compare it with the real price. '
+                'The first results will appear a week after the system was launched.</p></div>' + hist)
     cov = stats["coverage80"] * 100
     extra = ""
     if stats.get("brier") is not None:
-        extra += (f'<div class="card tile"><span class="muted sm">Szansa wzrostu: wynik Briera</span><b>{stats["brier"]:.3f}'.replace(".", ",")
-                  + f'</b><span class="muted sm">0 = idealnie, 0,25 = rzut monetą ({stats["brier_n"]} prognoz)</span></div>')
+        extra += (f'<div class="card tile"><span class="muted sm">Chance of a rise: Brier score</span><b>{stats["brier"]:.3f}'
+                  + f'</b><span class="muted sm">0 = perfect, 0.25 = coin toss ({stats["brier_n"]} forecasts)</span></div>')
     if stats.get("coverage90") is not None:
-        extra += (f'<div class="card tile"><span class="muted sm">Cena w paśmie 90%</span><b>{stats["coverage90"] * 100:.0f}%</b><span class="muted sm">cel: 90%</span></div>')
-    return (f'<p class="muted sm" style="margin:0 0 10px">Na żywo, od {stats.get("first", "")}: prognozy zapisane z góry i rozliczone po terminie.</p>'
-            f'<div class="tiles">{extra}<div class="card tile"><span class="muted sm">Sprawdzonych prognoz</span><b>{stats["n"]}</b></div>'
-            f'<div class="card tile"><span class="muted sm">Cena mieściła się w zakresie</span><b>{cov:.0f}%</b><span class="muted sm">cel: 80%</span></div>'
-            f'<div class="card tile"><span class="muted sm">Średnio pomyliliśmy się o</span><b>{stats["mape"]:.1f}%</b><span class="muted sm">środek prognozy vs prawdziwa cena</span></div>'
-            + (f'<div class="card tile"><span class="muted sm">Trafny kierunek</span><b>{stats["direction"]*100:.0f}%</b><span class="muted sm">50% = tyle samo, co rzut monetą (liczone dla {stats["direction_n"]} prognoz ze wskazanym kierunkiem)</span></div></div>'
+        extra += (f'<div class="card tile"><span class="muted sm">Price within the 90% band</span><b>{stats["coverage90"] * 100:.0f}%</b><span class="muted sm">target: 90%</span></div>')
+    return (f'<p class="muted sm" style="margin:0 0 10px">Live, since {stats.get("first", "")}: forecasts recorded in advance and settled after the deadline.</p>'
+            f'<div class="tiles">{extra}<div class="card tile"><span class="muted sm">Forecasts checked</span><b>{stats["n"]}</b></div>'
+            f'<div class="card tile"><span class="muted sm">Price stayed within the range</span><b>{cov:.0f}%</b><span class="muted sm">target: 80%</span></div>'
+            f'<div class="card tile"><span class="muted sm">On average we were off by</span><b>{stats["mape"]:.1f}%</b><span class="muted sm">middle of the forecast vs the real price</span></div>'
+            + (f'<div class="card tile"><span class="muted sm">Direction right</span><b>{stats["direction"]*100:.0f}%</b><span class="muted sm">50% = the same as a coin toss (counted for {stats["direction_n"]} forecasts that pointed in a direction)</span></div></div>'
                if stats.get("direction") is not None else
-               '<div class="card tile"><span class="muted sm">Trafny kierunek</span><b>nie dotyczy</b><span class="muted sm">prognozy były neutralne (środek równy cenie dziś), więc nie wskazywały kierunku</span></div></div>')) + hist
+               '<div class="card tile"><span class="muted sm">Direction right</span><b>not applicable</b><span class="muted sm">the forecasts were neutral (middle equal to today\'s price), so they did not point in any direction</span></div></div>')) + hist
 
 
 def sources_html(status):
@@ -923,7 +925,7 @@ def sources_html(status):
 
 
 def corr_html(corr):
-    names = {"ndx": "Nasdaq", "spx": "S&P 500", "gold": "Złoto", "dxy": "Dolar (DXY)"}
+    names = {"ndx": "Nasdaq", "spx": "S&P 500", "gold": "Gold", "dxy": "Dollar (DXY)"}
     rows = ""
     for k, v in corr.items():
         w = abs(v) * 50
@@ -934,11 +936,11 @@ def corr_html(corr):
 
 
 # ----------------------------------------------------------------------------------------------
-# Główna funkcja
+# Main function
 # ----------------------------------------------------------------------------------------------
 
 def baro_svg(v):
-    """Barometr: łuk 240 stopni od 'drogo' (lewo) do 'tanio' (prawo), igła z animacją."""
+    """Barometer: a 240-degree arc from 'expensive' (left) to 'cheap' (right), with an animated needle."""
     cx = cy = 200
     r, a0, sweep = 150, 150, 240
     pt = lambda th, rad: (cx + rad * math.cos(math.radians(th)), cy + rad * math.sin(math.radians(th)))
@@ -959,14 +961,14 @@ def baro_svg(v):
         xb, yb = pt(th, r + 28 if vv in (-1, 0, 1) else r + 24)
         ticks += f'<line x1="{xa:.1f}" y1="{ya:.1f}" x2="{xb:.1f}" y2="{yb:.1f}" stroke="var(--line2)" stroke-width="2" stroke-linecap="round"/>'
     top = pt(270, r + 46)
-    vt = f"{v:+.2f}".replace(".", ",").replace("-", "\u2212")
-    return f"""<svg viewBox="0 0 400 360" role="img" aria-label="Ocena rynku {vt}">
+    vt = f"{v:+.2f}".replace("-", "−")
+    return f"""<svg viewBox="0 0 400 360" role="img" aria-label="Market score {vt}">
 <path d="M{x0:.1f} {y0:.1f}A{r} {r} 0 1 1 {x1:.1f} {y1:.1f}" fill="none" stroke="var(--track)" stroke-width="26" stroke-linecap="round"/>
 <g fill="none" stroke-width="12" stroke-linecap="butt" opacity=".95">{segs}</g>
 {ticks}
-<text x="{pt(a0, r)[0] - 6:.0f}" y="{pt(a0, r)[1] + 46:.0f}" text-anchor="middle" style="fill:var(--red);font:600 12px var(--f-mono);letter-spacing:.14em">DROGO</text>
-<text x="{pt(a0 + sweep, r)[0] + 6:.0f}" y="{pt(a0 + sweep, r)[1] + 46:.0f}" text-anchor="middle" style="fill:var(--green);font:600 12px var(--f-mono);letter-spacing:.14em">TANIO</text>
-<text x="{top[0]:.0f}" y="{top[1] + 4:.0f}" text-anchor="middle" style="fill:var(--faint);font:600 10.5px var(--f-mono);letter-spacing:.14em">NORMALNIE</text>
+<text x="{pt(a0, r)[0] - 6:.0f}" y="{pt(a0, r)[1] + 46:.0f}" text-anchor="middle" style="fill:var(--red);font:600 12px var(--f-mono);letter-spacing:.14em">EXPENSIVE</text>
+<text x="{pt(a0 + sweep, r)[0] + 6:.0f}" y="{pt(a0 + sweep, r)[1] + 46:.0f}" text-anchor="middle" style="fill:var(--green);font:600 12px var(--f-mono);letter-spacing:.14em">CHEAP</text>
+<text x="{top[0]:.0f}" y="{top[1] + 4:.0f}" text-anchor="middle" style="fill:var(--faint);font:600 10.5px var(--f-mono);letter-spacing:.14em">NEUTRAL</text>
 <g class="needle" style="--rot:{v * 120:.1f}deg;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--accent) 70%,transparent))"><path d="M195 200L205 200L200 {200 - (r - 30)}Z" fill="var(--accent)"/></g>
 <circle cx="200" cy="200" r="12" fill="var(--fg)"/><circle cx="200" cy="200" r="4.5" fill="var(--bg)"/>
 <text x="200" y="262" text-anchor="middle" style="fill:var(--fg);font:800 46px var(--f-display);letter-spacing:-.03em">{vt}</text>
@@ -990,29 +992,29 @@ def isobars_svg():
 
 
 def forecast_tiles(res, ens):
-    names = {7: "Za tydzień", 30: "Za miesiąc", 90: "Za 3 miesiące", 180: "Za pół roku"}
+    names = {7: "In a week", 30: "In a month", 90: "In 3 months", 180: "In 6 months"}
     p0 = res["price"]
     out = ""
     for f in res["forecasts"]:
         H = f["horizon"]
         lo, hi = math.log(f["p5"]), math.log(f["p95"])
         pos = lambda v: (math.log(v) - lo) / (hi - lo) * 100
-        badge = '<span class="badge on">wsparte modelami</span>' if ens["horizons"][H]["alpha"] > 0 else '<span class="badge">typowe wahania</span>'
+        badge = '<span class="badge on">backed by models</span>' if ens["horizons"][H]["alpha"] > 0 else '<span class="badge">typical swings</span>'
         d = f["target"]
-        mon = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"][int(d[5:7]) - 1]
-        out += (f'<div class="ft"><span class="when">{names.get(H, f"Za {H} dni")} · {int(d[8:10])} {mon}</span>'
-                f'<div class="rng">{f["p10"] / 1000:.0f} – {f["p90"] / 1000:.0f}<small> tys. USD</small></div>'
+        mon = MON[int(d[5:7]) - 1]
+        out += (f'<div class="ft"><span class="when">{names.get(H, f"In {H} days")} · {mon} {int(d[8:10])}</span>'
+                f'<div class="rng">{f["p10"] / 1000:.0f} – {f["p90"] / 1000:.0f}<small>k USD</small></div>'
                 f'<div class="cone"><div class="a" style="left:{pos(f["p10"]):.1f}%;width:{pos(f["p90"]) - pos(f["p10"]):.1f}%"></div>'
                 f'<div class="m" style="left:{pos(f["p50"]):.1f}%"></div><div class="n" style="left:{pos(p0):.1f}%"></div></div>'
                 f'<div class="foot"><span>{(f["p10"] / p0 - 1) * 100:+.0f}%</span><span>{(f["p90"] / p0 - 1) * 100:+.0f}%</span></div>'
-                f'<div class="why">Szansa wzrostu ok. {f["prob_up"] * 100:.0f}%. {badge}</div></div>')
+                f'<div class="why">Chance of a rise about {f["prob_up"] * 100:.0f}%. {badge}</div></div>')
     return out
 
 
 def verdict_html(res):
     fc = {f["horizon"]: f for f in res["forecasts"]}
     f = fc.get(30) or list(fc.values())[0]
-    return f'{res["regime"]}. Za miesiąc cena najpewniej zmieści się między <b>{n(f["p10"] / 1000)}</b> a <b>{n(f["p90"] / 1000)} tys.</b> USD.'
+    return f'{res["regime"]}. In a month the price will most likely be between <b>{n(f["p10"] / 1000)}k</b> and <b>{n(f["p90"] / 1000)}k</b> USD.'
 
 
 def signals_html(res):
@@ -1027,17 +1029,17 @@ def signals_html(res):
                 continue
             s = p["score"]
             if s is None:
-                scale, val, txt = '<div class="scale na"></div>', "–", "brak danych"
+                scale, val, txt = '<div class="scale na"></div>', "–", "no data"
             else:
                 scs.append(s * p["weight"])
                 ws.append(p["weight"])
                 scale = f'<div class="scale"><i class="pin" style="left:{(s + 1) / 2 * 100:.0f}%"></i></div>'
                 val = raw_value(k, fe)
-                txt = "tanio" if s >= 0.35 else "drogo" if s <= -0.35 else "neutralnie"
+                txt = "cheap" if s >= 0.35 else "expensive" if s <= -0.35 else "neutral"
             rows += (f'<div class="srow"><div class="s-name"><b>{LABELS[k]}</b><span>{SRC_NOTE[k]}</span></div>{scale}'
                      f'<div class="s-val"><b>{val}</b><span>{txt}</span></div></div>')
         avg = sum(scs) / sum(ws) if ws else None
-        chip = "" if avg is None else ('<span class="gchip g">raczej tanio</span>' if avg >= 0.15 else '<span class="gchip r">raczej drogo</span>' if avg <= -0.15 else '<span class="gchip">neutralnie</span>')
+        chip = "" if avg is None else ('<span class="gchip g">rather cheap</span>' if avg >= 0.15 else '<span class="gchip r">rather expensive</span>' if avg <= -0.15 else '<span class="gchip">neutral</span>')
         out += (f'<details class="grp"{" open" if i == 0 else ""}><summary><div class="gt"><h3>{title}</h3><p>{sub}</p></div>{chip}</summary>'
                 f'<div class="rows">{rows}</div></details>')
     return out
@@ -1047,47 +1049,33 @@ def summary_bullets(res, ens, E):
     p0 = res["price"]
     none = all(h["alpha"] == 0 for h in ens["horizons"].values())
     if none:
-        direction = ('<b>Czy cena pójdzie w górę, czy w dół? Tego nie umiemy wiarygodnie przewidzieć.</b> Sprawdziliśmy to na historii: '
-                     'żadna z naszych metod nie była lepsza od prostego założenia „cena zostanie taka sama”. Szansa na wzrost to więc około 50 na 50.')
+        direction = ('<b>Will the price go up or down? We cannot reliably predict that.</b> We checked this against history: '
+                     'none of our methods did better than the simple assumption “the price will stay the same”. So the chance of a rise is about 50/50.')
     else:
         act = ", ".join(str(H) for H, h in ens["horizons"].items() if h["alpha"] > 0)
-        direction = (f'<b>Czy cena pójdzie w górę, czy w dół?</b> Na okresie {act} dni nasze metody okazały się lepsze od zgadywania i lekko przesuwają prognozę, '
-                     'ale to wciąż bardzo niepewne. Na pozostałych okresach nie umiemy tego wiarygodnie przewidzieć.')
+        direction = (f'<b>Will the price go up or down?</b> Over {act} days our methods turned out better than guessing and nudge the forecast slightly, '
+                     'but this is still very uncertain. For the other periods we cannot reliably predict it.')
     nxt = next((u for u in E["upcoming"] if u["cat"] != "nfp"), None)
     items = [
-        f'<li><div><b>Bitcoin kosztuje dziś {n(p0)} USD.</b> {res["regime"]}. <span class="muted">(Ocena rynku {res["composite"]:+.2f} w skali od −1 „drogo” do +1 „tanio”.)</span></div></li>',
-        '<li><div><b>Gdzie może być cena?</b> Zakresy poniżej obejmują prawdziwą cenę w około 4 przypadkach na 5. Dla dowolnej liczby dni sprawdzisz to suwakiem w sekcji „Prognoza”.</div></li>',
+        f'<li><div><b>Bitcoin costs {n(p0)} USD today.</b> {res["regime"]}. <span class="muted">(Market score {res["composite"]:+.2f} on a scale from −1 “expensive” to +1 “cheap”.)</span></div></li>',
+        '<li><div><b>Where could the price be?</b> The ranges below contain the real price in about 4 cases out of 5. For any number of days you can check this with the slider in the “Forecast” section.</div></li>',
         f'<li><div>{direction}</div></li>',
-        '<li><div><b>Co potrafimy dobrze:</b> oceniać, jak mocno cena może się wahać. W testach na historii nasze zakresy trafiały w około 8 na 10 przypadków.</div></li>',
+        '<li><div><b>What we do well:</b> judging how much the price may swing. In tests on history our ranges were right in about 8 cases out of 10.</div></li>',
     ]
     if nxt:
-        items.append(f'<li><div><b>Najbliższe ważne wydarzenie:</b> {html.escape(nxt["title"])} ({nxt["date"]}).</div></li>')
+        items.append(f'<li><div><b>Next important event:</b> {html.escape(nxt["title"])} ({nxt["date"]}).</div></li>')
     return "".join(items)
 
 
 def _now_str():
-    """Godzina odświeżenia w czasie polskim (gdy brak bazy stref czasowych: UTC z oznaczeniem)."""
+    """Refresh time in Polish time, Europe/Warsaw (if the time zone database is missing: UTC, labelled as such)."""
     try:
         from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%d.%m.%Y, %H:%M")
+        t = datetime.now(ZoneInfo("Europe/Warsaw"))
+        return f"{MON[t.month - 1]} {t.day}, {t.year}, {t:%H:%M} {t:%Z}"
     except Exception:
-        return datetime.utcnow().strftime("%d.%m.%Y, %H:%M UTC")
-
-
-def _pl_decimals(page):
-    """Zamienia kropkę dziesiętną na przecinek w tekście strony (poza znacznikami, stylami i skryptami)."""
-    i = page.index("<script>")
-    parts = re.split(r"(<style.*?</style>|<[^>]+>)", page[:i], flags=re.S)
-    date = re.compile(r"\b\d{1,2}\.\d{1,2}\.\d{4}\b")                # daty typu 29.10.2024 zostają z kropkami
-
-    def fix(p):
-        keep = date.findall(p)
-        p = date.sub("\x00", p)
-        p = re.sub(r"(?<=\d)\.(?=\d)", ",", p)
-        for d in keep:
-            p = p.replace("\x00", d, 1)
-        return p
-    return "".join(p if p.startswith("<") else fix(p) for p in parts) + page[i:]
+        t = datetime.utcnow()
+        return f"{MON[t.month - 1]} {t.day}, {t.year}, {t:%H:%M} UTC"
 
 
 TRADER_CSS = (".tj{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--card2);display:grid;gap:8px}"
@@ -1098,121 +1086,124 @@ TRADER_CSS = (".tj{border:1px solid var(--line);border-radius:14px;padding:14px 
 
 
 def _tj_card(r):
-    """Jeden wpis dziennika tradera: co widzę, co robię i dlaczego, kiedy zmienię zdanie."""
-    zl = lambda v: f"{v:,.0f} zł".replace(",", " ")
-    lab, cls = {"KUP": ("kupno", "pos"), "SPRZEDAJ": ("sprzedaż", "neg"), "TRZYMAJ": ("czekam", "muted")}[r["action"]]
+    """One trader journal entry: what I see, what I do and why, when I'll change my mind."""
+    zl = lambda v: f"{v:,.0f} PLN"
+    # KUP / SPRZEDAJ / TRZYMAJ are internal action codes written by trader.py; only the labels shown are English
+    lab, cls = {"KUP": ("buy", "pos"), "SPRZEDAJ": ("sell", "neg"), "TRZYMAJ": ("waiting", "muted")}[r["action"]]
     amt = f" {zl(r['amount_pln'])}" if r["action"] != "TRZYMAJ" else ""
     w_after = r["btc"] * r["price_pln"] / r["value"] if r["value"] else 0
-    usd = f'{r["price_usd"]:,.0f}'.replace(",", " ")
+    usd = f'{r["price_usd"]:,.0f}'
     return (f'<article class="tj"><h4><span>{html.escape(str(r["local"]))}</span><span class="tag {cls}">{lab}{amt}</span>'
-            f'<span class="muted sm">cena {zl(r["price_pln"])} ({usd} USD)</span></h4>'
-            + f'<dl><div><dt>Co widzę</dt><dd>{html.escape(str(r["seen"]))}</dd></div>'
-            f'<div><dt>Co robię i dlaczego</dt><dd>{html.escape(str(r["do"]))}</dd></div>'
-            f'<div><dt>Kiedy zmienię zdanie</dt><dd>{html.escape(str(r["change"]))}</dd></div></dl>'
-            f'<div class="foot">Po decyzji: portfel {zl(r["value"])}, w BTC {w_after * 100:.0f}%, gotówka {zl(r["cash"])}. Źródło ceny: {html.escape(str(r["src"]))}.</div></article>')
+            f'<span class="muted sm">price {zl(r["price_pln"])} ({usd} USD)</span></h4>'
+            + f'<dl><div><dt>What I see</dt><dd>{html.escape(str(r["seen"]))}</dd></div>'
+            f'<div><dt>What I do and why</dt><dd>{html.escape(str(r["do"]))}</dd></div>'
+            f'<div><dt>When I\'ll change my mind</dt><dd>{html.escape(str(r["change"]))}</dd></div></dl>'
+            f'<div class="foot">After the decision: portfolio {zl(r["value"])}, {w_after * 100:.0f}% in BTC, cash {zl(r["cash"])}. Price source: {html.escape(str(r["src"]))}.</div></article>')
 
 
 def _tj_score(TR):
-    zl = lambda v: f"{'+' if v >= 0 else '−'}{abs(v):,.0f} zł".replace(",", " ")
+    zl = lambda v: f"{'+' if v >= 0 else '−'}{abs(v):,.0f} PLN"
     sc = TR.get("score") or []
     d1 = [x["d1"] for x in sc if x.get("d1") is not None]
     d7 = [x["d7"] for x in sc if x.get("d7") is not None]
     if not sc:
-        return "Trader nie zawarł jeszcze żadnej transakcji, więc nie ma czego rozliczać."
-    part = lambda arr, lab: (f"po {lab}: {len(arr)} rozliczonych, {sum(v > 0 for v in arr)} na plus, razem {zl(sum(arr))}" if arr else f"po {lab}: jeszcze za wcześnie")
-    return (f"Każdą transakcję porównujemy z tym, co by było, gdyby trader nic nie zrobił (z prowizją). {part(d1, '1 dniu')}; {part(d7, '7 dniach')}. "
-            "Pojedyncze dni to głównie przypadek; sens ma dopiero suma z wielu miesięcy.")
+        return "The trader has not made any trades yet, so there is nothing to settle."
+    part = lambda arr, lab: (f"after {lab}: {len(arr)} settled, {sum(v > 0 for v in arr)} in profit, {zl(sum(arr))} in total" if arr else f"after {lab}: too early to tell")
+    p1 = part(d1, '1 day')
+    return (f"We compare every trade with what would have happened if the trader had done nothing (fees included). {p1[0].upper() + p1[1:]}; {part(d7, '7 days')}. "
+            "Single days are mostly luck; only the total over many months means something.")
 
 
 def trader_html(TR):
-    """Wirtualny trader: decyzje co ok. 6 godzin, ostatnie wpisy dziennika i rozliczenie transakcji."""
+    """Virtual trader: decisions about every 6 hours, the latest journal entries and the settlement of trades."""
     if not TR or not TR.get("log"):
-        return ('<div class="card empty"><b>Trader zacznie przy najbliższej aktualizacji w chmurze</b>'
-                '<p class="muted">Decyzje zapadają co ok. 6 godzin; pierwsza pojawi się tutaj z uzasadnieniem.</p></div>')
-    zl = lambda v: f"{v:,.0f} zł".replace(",", " ")
+        return ('<div class="card empty"><b>The trader will start at the next cloud update</b>'
+                '<p class="muted">Decisions are made about every 6 hours; the first one will appear here with its reasoning.</p></div>')
+    zl = lambda v: f"{v:,.0f} PLN"
     diff = TR["value"] - TR["dca_value"]
-    tiles = [("Wartość teraz", zl(TR["value"]), f"wpłacono {zl(TR['deposited'])}"),
-             ("Wynik", f"{(TR['value'] / TR['deposited'] - 1) * 100:+.1f}%".replace(".", ","), "od pierwszej wpłaty 28.10.2026"),
-             ("Względem regularnego kupowania", f'{"+" if diff >= 0 else "−"}{zl(abs(diff))}', f"regularne kupowanie: {zl(TR['dca_value'])}"),
-             ("Teraz w BTC", f"{TR['w'] * 100:.0f}%", f"gotówka {zl(TR['cash'])}, prowizje {zl(TR['fees'])}")]
+    tiles = [("Value now", zl(TR["value"]), f"deposited {zl(TR['deposited'])}"),
+             ("Result", f"{(TR['value'] / TR['deposited'] - 1) * 100:+.1f}%", "since the first deposit on Oct 28, 2026"),
+             ("Compared with regular buying", f'{"+" if diff >= 0 else "−"}{zl(abs(diff))}', f"regular buying: {zl(TR['dca_value'])}"),
+             ("Now in BTC", f"{TR['w'] * 100:.0f}%", f"cash {zl(TR['cash'])}, fees {zl(TR['fees'])}")]
     tl = "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b}</b><span class="muted sm">{c}</span></div>' for a, b, c in tiles)
     cards = "".join(_tj_card(r) for r in TR["log"][:6])
     return (f'<style>{TRADER_CSS}</style>'
-            f'<h3 class="ct" style="margin:0 0 12px">Wirtualny trader: decyzja co ok. 6 godzin</h3>'
-            f'<p class="muted sm" style="margin:0 0 12px">Od 31.10.2026 trader sprawdza rynek przy każdej aktualizacji (ok. 1:00, 7:00, 13:00 i 19:00 czasu polskiego) '
-            f'i po bieżącej cenie decyduje: kupić, sprzedać czy czekać, i za ile. Cel: jak najwięcej złotych w długim okresie. Każdy wpis mówi, co trader widzi, co robi '
-            f'i przy jakiej cenie zmieni zdanie. Wpisy są tylko dopisywane, nigdy poprawiane. Dotąd {TR["n"]} decyzji, w tym {TR["n_trades"]} transakcji.</p>'
+            f'<h3 class="ct" style="margin:0 0 12px">Virtual trader: a decision about every 6 hours</h3>'
+            f'<p class="muted sm" style="margin:0 0 12px">Since Oct 31, 2026 the trader checks the market at every update (around 1:00, 7:00, 13:00 and 19:00 Polish time) '
+            f'and, at the current price, decides whether to buy, sell or wait, and for how much. Goal: as many zloty (PLN) as possible over the long run. Each entry says what the trader sees, what it does '
+            f'and at what price it will change its mind. Entries are only ever added, never edited. So far {TR["n"]} decisions, including {TR["n_trades"]} trades.</p>'
             f'<div class="tiles">{tl}</div>'
-            f'<div class="panel" style="margin-top:18px"><h3 class="ct">Dziennik (najnowsze na górze)</h3>{cards}'
-            f'<p style="margin:14px 0 0"><a href="dziennik.html"><b>Cały dziennik tradera →</b></a></p></div>'
-            f'<div class="panel" style="margin-top:18px"><h3 class="ct">Czy decyzje się opłacają?</h3><p style="margin:0">{_tj_score(TR)}</p>'
-            f'<p class="note"><b>Uczciwie:</b> częstsze decyzje nie dają same z siebie większego zysku. Kierunku ceny na najbliższe godziny i dni nikt nie umie przewidzieć '
-            f'(nasze testy też tego nie potrafią), a każda transakcja kosztuje prowizję. Dlatego trader handluje tylko wtedy, gdy zmienia się obraz rynku '
-            f'(trend albo poziom wahań), a nie przy każdym drgnięciu ceny. To eksperyment na wirtualnych pieniądzach, nie porada inwestycyjna.</p></div>'
-            f'<h3 class="ct" style="margin:28px 0 12px">Dla porównania: te same zasady, decyzja raz dziennie i test na historii</h3>')
+            f'<div class="panel" style="margin-top:18px"><h3 class="ct">Journal (newest first)</h3>{cards}'
+            f'<p style="margin:14px 0 0"><a href="journal.html"><b>The full trader journal →</b></a></p></div>'
+            f'<div class="panel" style="margin-top:18px"><h3 class="ct">Do the decisions pay off?</h3><p style="margin:0">{_tj_score(TR)}</p>'
+            f'<p class="note"><b>To be honest:</b> more frequent decisions do not by themselves bring more profit. Nobody can predict the direction of the price over the next hours and days '
+            f'(our tests cannot either), and every trade costs a fee. That is why the trader only trades when the picture of the market changes '
+            f'(the trend or the level of swings), not at every twitch of the price. This is an experiment with virtual money, not investment advice.</p></div>'
+            f'<h3 class="ct" style="margin:28px 0 12px">For comparison: the same rules, one decision a day, and a test on history</h3>')
 
 
 def write_journal(TR):
-    """Osobna strona docs/dziennik.html: wszystkie decyzje tradera, czytelnie, od najnowszej."""
+    """Separate page docs/journal.html: all of the trader's decisions, easy to read, newest first."""
     if not TR or not TR.get("log"):
         return
-    zl = lambda v: f"{v:,.0f} zł".replace(",", " ")
+    zl = lambda v: f"{v:,.0f} PLN"
     head = (C.ROOT / "template_head.html").read_text(encoding="utf-8")
     a, b = head.find(":root{"), head.find("*{box-sizing")
     tokens = head[a:b] if a >= 0 and b > a else ""
     cards = "".join(_tj_card(r) for r in TR["log"])
-    page = ('<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            '<title>Dziennik tradera</title>'
+    page = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
+            '<title>Bitcoin virtual trader journal: every decision explained | Bitcoin Barometer</title>''<meta name="description" content="A virtual Bitcoin trader decides every 6 hours whether to buy, sell or wait, and explains each decision in plain English. Educational, no real money.">''<meta name="author" content="Przemysław Wywigacz"><link rel="canonical" href="https://wywigacz.github.io/bitcoin-predictor/journal.html">''<meta property="og:image" content="https://wywigacz.github.io/bitcoin-predictor/preview.png">'
             '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Manrope:wght@400;600&family=IBM+Plex+Mono:wght@600&display=swap">'
             f'<style>{tokens}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--fg);font:400 15.5px/1.6 var(--f-body);'
             'padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}'
             'main{max-width:760px;margin:0 auto;padding-block:32px 64px}h1{font:700 30px/1.15 var(--f-display);margin:0 0 8px;text-wrap:balance}'
             'a{color:var(--accent)}.muted{color:var(--muted)}.sm{font-size:12.5px}.pos{color:var(--green)}.neg{color:var(--red)}'
             f'{TRADER_CSS}</style></head><body><main>'
-            '<p class="sm"><a href="index.html">← Barometr Bitcoina</a></p><h1>Dziennik wirtualnego tradera</h1>'
-            f'<p class="muted">Decyzja co ok. 6 godzin od 31.10.2026. Portfel {zl(TR["value"])} przy wpłatach {zl(TR["deposited"])}; '
-            f'regularne kupowanie miałoby {zl(TR["dca_value"])}. Eksperyment na wirtualnych pieniądzach, nie porada inwestycyjna.</p>'
+            '<p class="sm"><a href="index.html">← Bitcoin Barometer</a></p><h1>Virtual trader journal</h1>'
+            f'<p class="muted">A decision about every 6 hours since Oct 31, 2026. Portfolio {zl(TR["value"])} on deposits of {zl(TR["deposited"])}; '
+            f'regular buying would have {zl(TR["dca_value"])}. An experiment with virtual money, not investment advice.</p>'
             + f'<p>{_tj_score(TR)}</p>{cards}</main></body></html>')
-    (C.DASHBOARD_HTML.parent / "dziennik.html").write_text(page, encoding="utf-8")
+    (C.DASHBOARD_HTML.parent / "journal.html").write_text(page, encoding="utf-8")
 
 
 def sim_html(SM):
-    """Wirtualny, aktywnie zarządzany portfel: stan, ostatnie decyzje z uzasadnieniem, test na historii."""
+    """Virtual, actively managed portfolio: status, latest decisions with reasons, test on history."""
     if not SM:
-        return '<div class="card empty"><b>Portfel jeszcze się nie uruchomił</b><p class="muted">Pierwsza decyzja pojawi się po najbliższej aktualizacji.</p></div>'
+        return '<div class="card empty"><b>The portfolio has not started yet</b><p class="muted">The first decision will appear after the next update.</p></div>'
     import sim as SI
-    zl = lambda v: f"{v:,.0f} zł".replace(",", " ")
+    zl = lambda v: f"{v:,.0f} PLN"
     pc = lambda v: f"{v * 100:.0f}%"
-    pl = lambda v: f"{v * 100:+.1f}%".replace(".", ",")
+    pl = lambda v: f"{v * 100:+.1f}%"
     out = ""
     L = SM.get("live")
     if L:
         gain = L["value"] / L["deposited"] - 1
         diff = L["value"] - L["dca_value"]
-        bars = "".join(f'<div class="sig sm-row"><div class="sig-l"><b>{k.capitalize()}</b><span class="muted sm"> chce {pc(L["t"][k])} w BTC</span></div>'
+        bars = "".join(f'<div class="sig sm-row"><div class="sig-l"><b>{k.capitalize()}</b><span class="muted sm"> wants {pc(L["t"][k])} in BTC</span></div>'
                        f'<div class="dv"><span class="g" style="left:0;width:{L["p"][k] * 100:.0f}%"></span></div><div class="sig-v"><b>{pc(L["p"][k])}</b></div></div>'
                        for k in SI.STRATS)
-        tiles = [("Wartość portfela", zl(L["value"]), f"stan na {L['date']}"),
-                 ("Wpłacono", zl(L["deposited"]), f"wynik {pl(gain)}"),
-                 ("W porównaniu z regularnym kupowaniem", f'{"+" if diff >= 0 else "−"}{zl(abs(diff))}', f"regularne kupowanie: {zl(L['dca_value'])}"),
-                 ("Teraz w BTC", pc(L["w"]), f"reszta w gotówce: {zl(L['cash'])}")]
+        tiles = [("Portfolio value", zl(L["value"]), f"as of {L['date']}"),
+                 ("Deposited", zl(L["deposited"]), f"result {pl(gain)}"),
+                 ("Compared with regular buying", f'{"+" if diff >= 0 else "−"}{zl(abs(diff))}', f"regular buying: {zl(L['dca_value'])}"),
+                 ("Now in BTC", pc(L["w"]), f"rest in cash: {zl(L['cash'])}")]
         tl = "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b}</b><span class="muted sm">{c}</span></div>' for a, b, c in tiles)
         last = L["log"][0]
         logrows = ""
         for r in L["log"]:
-            act = {"KUP": "kupno", "SPRZEDAJ": "sprzedaż", "TRZYMAJ": "bez zmian"}[r["action"]]
+            # KUP / SPRZEDAJ / TRZYMAJ are internal action codes written by sim.py
+            act = {"KUP": "buy", "SPRZEDAJ": "sell", "TRZYMAJ": "no change"}[r["action"]]
             cls = {"KUP": "pos", "SPRZEDAJ": "neg", "TRZYMAJ": "muted"}[r["action"]]
-            dep = f' <span class="muted sm">(+{zl(r["deposit"])} wpłaty)</span>' if r["deposit"] else ""
+            dep = f' <span class="muted sm">(+{zl(r["deposit"])} deposit)</span>' if r["deposit"] else ""
             logrows += (f'<tr><td>{r["date"]}{dep}</td><td class="{cls}"><b>{act}</b>{" " + zl(r["amount_pln"]) if r["action"] != "TRZYMAJ" else ""}</td>'
                         f'<td>{pc(r["w_before"])} → {pc(r["target"])}</td><td>{zl(r["value"])}</td></tr>'
                         f'<tr class="why"><td colspan="4" class="muted sm">{html.escape(r["why"])}</td></tr>')
         out += (f'<div class="tiles">{tl}</div>'
-                f'<div class="two2" style="margin-top:18px"><div class="panel"><h3 class="ct">Ostatnia decyzja ({last["date"]})</h3>'
+                f'<div class="two2" style="margin-top:18px"><div class="panel"><h3 class="ct">Latest decision ({last["date"]})</h3>'
                 f'<p style="margin:0">{html.escape(last["why"])}</p></div>'
-                f'<div class="panel"><h3 class="ct">Czego się nauczył: wagi strategii</h3>'
-                f'<p class="muted sm" style="margin:0 0 8px">Strategia, która w ostatnim roku zarobiłaby więcej, dostaje większy głos (algorytm Hedge). Najmniej 5% dla każdej.</p>{bars}</div></div>'
-                f'<div class="panel" style="margin-top:18px"><h3 class="ct">Dziennik decyzji (najnowsze na górze)</h3>'
-                f'<div class="tw"><table class="tbl"><tr><th>Dzień</th><th>Decyzja</th><th>Udział BTC</th><th>Wartość</th></tr>{logrows}</table></div></div>')
+                f'<div class="panel"><h3 class="ct">What it has learned: strategy weights</h3>'
+                f'<p class="muted sm" style="margin:0 0 8px">A strategy that would have earned more over the last year gets a bigger say (the Hedge algorithm). Each gets at least 5%.</p>{bars}</div></div>'
+                f'<div class="panel" style="margin-top:18px"><h3 class="ct">Decision log (newest first)</h3>'
+                f'<div class="tw"><table class="tbl"><tr><th>Day</th><th>Decision</th><th>BTC share</th><th>Value</th></tr>{logrows}</table></div></div>')
     b = SM["backtest"]
     a, d = b["active"], b["dca"]
     cv = b["curve"]
@@ -1222,66 +1213,66 @@ def sim_html(SM):
     pts = lambda arr: " ".join(f"{i / (n - 1) * W_:.1f},{H_ - v / mx * H_:.1f}" for i, v in enumerate(arr))
     yrs = sorted({s[:4] for s in cv["d"]})
     ticks = "".join(f'<text x="{cv["d"].index(next(s for s in cv["d"] if s.startswith(y))) / (n - 1) * W_:.0f}" y="{H_ + 16}" class="ax">{y}</text>' for y in yrs[::2])
-    svg = (f'<svg viewBox="0 -6 {W_} {H_ + 24}" role="img" aria-label="Wartość portfela aktywnego i regularnego kupowania od {b["start"]}" style="width:100%;height:auto">'
+    svg = (f'<svg viewBox="0 -6 {W_} {H_ + 24}" role="img" aria-label="Value of the active portfolio and of regular buying since {b["start"]}" style="width:100%;height:auto">'
            f'<polyline points="{pts(cv["dep"])}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>'
            f'<polyline points="{pts(cv["b"])}" fill="none" stroke="var(--amber)" stroke-width="2"/>'
            f'<polyline points="{pts(cv["a"])}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>{ticks}</svg>')
     row = lambda lab, f: f'<tr><td>{lab}</td><td><b>{f(a)}</b></td><td>{f(d)}</td></tr>'
-    tbl = (row("Wartość na koniec", lambda s: zl(s["final"])) + row("Zysk względem wpłat", lambda s: pl(s["gain_pct"]))
-           + row("Roczny zwrot (bez wpływu wpłat)", lambda s: pl(s["twr_ann"])) + row("Największy spadek po drodze", lambda s: pl(s["max_dd"])))
-    out += (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Test na historii: te same zasady od {b["start"]}</h3>'
-            f'<p class="muted sm" style="margin:0 0 10px">Wpłaty łącznie {zl(a["deposited"])}. Linia pomarańczowa: zwykłe regularne kupowanie. '
-            f'Linia w kolorze akcentu: aktywny portfel. Przerywana: suma wpłat. Portfel zawarł {b["trades"]} transakcji, średnio trzymał {pc(b["avg_btc"])} w BTC, '
-            f'prowizje są wliczone.</p>{svg}'
-            f'<div class="tw"><table class="tbl" style="margin-top:10px"><tr><th></th><th>Aktywny portfel</th><th>Regularne kupowanie</th></tr>{tbl}</table></div>'
-            f'<p class="note"><b>Uczciwie:</b> ten wynik jest optymistyczny. Strategię trendu wybraliśmy, wiedząc z testu H7, że trend działał właśnie w tych latach, '
-            f'a test na historii nie zna przyszłych zmian rynku. Prawdziwą miarą jest portfel na żywo powyżej: jego decyzje zapisujemy co dzień i nigdy ich nie poprawiamy wstecz. '
-            f'Ryzyko giełdy pominięte; podatek liczymy osobno poniżej.</p></div>')
+    tbl = (row("Value at the end", lambda s: zl(s["final"])) + row("Gain relative to deposits", lambda s: pl(s["gain_pct"]))
+           + row("Annual return (excluding the effect of deposits)", lambda s: pl(s["twr_ann"])) + row("Biggest drop along the way", lambda s: pl(s["max_dd"])))
+    out += (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Test on history: the same rules since {b["start"]}</h3>'
+            f'<p class="muted sm" style="margin:0 0 10px">Total deposits {zl(a["deposited"])}. Orange line: plain regular buying. '
+            f'Accent-coloured line: the active portfolio. Dashed line: total deposits. The portfolio made {b["trades"]} trades, held {pc(b["avg_btc"])} in BTC on average, '
+            f'and fees are included.</p>{svg}'
+            f'<div class="tw"><table class="tbl" style="margin-top:10px"><tr><th></th><th>Active portfolio</th><th>Regular buying</th></tr>{tbl}</table></div>'
+            f'<p class="note"><b>To be honest:</b> this result is optimistic. We chose the trend strategy knowing from test H7 that the trend worked in exactly these years, '
+            f'and a test on history does not know about future changes in the market. The real measure is the live portfolio above: we record its decisions every day and never edit them afterwards. '
+            f'Exchange risk is left out; tax is calculated separately below.</p></div>')
     tx = b.get("tax") or {}
     if tx.get("since2018"):
-        trow = lambda lab, t: (f'<tr><td>{lab}</td><td>{zl(t["deposited"])}</td><td><b>{zl(t["active_after"])}</b> <span class="muted sm">(podatek {zl(t["active_tax"])})</span></td>'
-                               f'<td>{zl(t["dca_after"])} <span class="muted sm">(podatek {zl(t["dca_tax"])})</span></td>'
+        trow = lambda lab, t: (f'<tr><td>{lab}</td><td>{zl(t["deposited"])}</td><td><b>{zl(t["active_after"])}</b> <span class="muted sm">(tax {zl(t["active_tax"])})</span></td>'
+                               f'<td>{zl(t["dca_after"])} <span class="muted sm">(tax {zl(t["dca_tax"])})</span></td>'
                                f'<td>{t["active_after"] / t["dca_after"]:.2f}</td></tr>' if t["dca_after"] else "")
-        tr_ = trow(f'od {b["start"]}', tx["since2018"]) + (trow("egzamin: od 29.10.2024", tx["exam"]) if tx.get("exam") else "")
-        out += (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Po polskim podatku i z odsetkami od gotówki</h3>'
-                f'<p class="muted sm" style="margin:0 0 10px">Aktywny portfel sprzedaje, więc płaci podatek co roku, a regularne kupowanie dopiero przy sprzedaży. '
-                f'Liczymy to tak jak w Polsce: 19% od rocznego dochodu z kryptowalut (przychód ze sprzedaży minus wydatki na zakup; nadwyżka wydatków przechodzi na kolejne lata), '
-                f'podatek płacony 30 kwietnia następnego roku. Gotówka leży na lokacie oprocentowanej na stopę referencyjną NBP minus 1 punkt procentowy, '
-                f'z odsetek odliczamy 19% podatku Belki. Na koniec oba portfele sprzedajemy i płacimy zaległy podatek, żeby porównanie było uczciwe.</p>'
-                f'<div class="tw"><table class="tbl"><tr><th>Okres</th><th>Wpłacono</th><th>Aktywny portfel na rękę</th><th>Regularne kupowanie na rękę</th><th>Stosunek</th></tr>{tr_}</table></div>'
-                f'<p class="muted sm" style="margin:6px 0 0">Wersja uproszczona: bez kosztów przelewów i bez rozliczania strat z innymi dochodami. To ćwiczenie edukacyjne, nie porada podatkowa.</p></div>')
+        tr_ = trow(f'since {b["start"]}', tx["since2018"]) + (trow("exam: from Oct 29, 2024", tx["exam"]) if tx.get("exam") else "")
+        out += (f'<div class="panel" style="margin-top:18px"><h3 class="ct">After Polish tax and with interest on cash</h3>'
+                f'<p class="muted sm" style="margin:0 0 10px">The active portfolio sells, so it pays tax every year, while regular buying pays only when it sells. '
+                f'We calculate this as in Poland: 19% of the annual income from crypto (proceeds from sales minus purchase costs; any excess of costs carries over to later years), '
+                f'with the tax paid on April 30 of the following year. Cash sits in a deposit paying the National Bank of Poland reference rate minus 1 percentage point, '
+                f'and 19% tax on interest (the so-called Belka tax) is deducted. At the end both portfolios are sold and the outstanding tax is paid, so that the comparison is fair.</p>'
+                f'<div class="tw"><table class="tbl"><tr><th>Period</th><th>Deposited</th><th>Active portfolio after tax</th><th>Regular buying after tax</th><th>Ratio</th></tr>{tr_}</table></div>'
+                f'<p class="muted sm" style="margin:6px 0 0">A simplified version: no transfer costs and no offsetting of losses against other income. This is an educational exercise, not tax advice.</p></div>')
     rb = b.get("robust") or {}
     if rb.get("2y"):
         r2, r4 = rb["2y"], rb.get("4y") or {}
-        pp = lambda v: f"{v:+.1f} pkt proc.".replace(".", ",")
-        rr = lambda v: f"{v:.2f}".replace(".", ",")
-        wr = ("".join(f'<tr><td>okna {k[0]}-letnie ({x["n"]})</td><td>{pc(x["beat_dca"])}</td><td>{rr(x["med_vs_dca"])} ({rr(x["p10"])}–{rr(x["p90"])})</td>'
+        pp = lambda v: f"{v:+.1f} pp"
+        rr = lambda v: f"{v:.2f}"
+        wr = ("".join(f'<tr><td>{k[0]}-year windows ({x["n"]})</td><td>{pc(x["beat_dca"])}</td><td>{rr(x["med_vs_dca"])} ({rr(x["p10"])}–{rr(x["p90"])})</td>'
                       f'<td>{pc(x["beat_blind"])}</td><td>{pp(x["dd_vs_dca_pp"])}</td><td>{pp(x["dd_vs_blind_pp"])}</td></tr>'
                       for k, x in (("2y", r2), ("4y", r4)) if x))
-        fr = "".join(f'<tr><td>{f["L"]} dni{" (używane)" if f["L"] == 28 else ""}</td><td>{rr(f["since2018"])}</td><td>{rr(f["exam"])}</td></tr>' for f in rb.get("fragility", []))
+        fr = "".join(f'<tr><td>{f["L"]} days{" (in use)" if f["L"] == 28 else ""}</td><td>{rr(f["since2018"])}</td><td>{rr(f["exam"])}</td></tr>' for f in rb.get("fragility", []))
         ci = rb.get("exam_ci")
-        citxt = (f'Na egzaminie aktywny portfel zarabiał średnio {pl(ci["mean_ann"])} rocznie więcej niż regularne kupowanie, ale 90% przedział ufności '
-                 f'to od {pl(ci["lo_ann"])} do {pl(ci["hi_ann"])}: zero mieści się w środku, więc to nie jest dowód przewagi. ') if ci else ""
-        h1n = (f'Prosta średnia trzech strategii (1/N) wypada prawie tak samo jak wagi uczone algorytmem Hedge: {rr(rb["1n"]["since2018"])} wobec {rr(rb["hedge"]["since2018"])} '
-               f'od 2018 roku (stosunek do regularnego kupowania), czyli „uczenie się” wag na razie niewiele dodaje. ') if rb.get("1n") and rb.get("hedge") else ""
-        out += (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Umiejętność czy szczęście?</h3>'
-                f'<p class="muted sm" style="margin:0 0 10px">Jeden wynik od jednej daty startu niewiele mówi. Dlatego te same zasady uruchamiamy od początku każdego miesiąca od 2014 roku '
-                f'i porównujemy nie tylko z regularnym kupowaniem, ale też ze „ślepym” portfelem, który trzyma stały udział BTC równy średniemu udziałowi aktywnego portfela '
-                f'(ok. {pc(r2["avg_w"])}) i nie patrzy na żadne sygnały. Dopiero przewaga nad nim pokazuje, że sygnały coś dają, a nie tylko mniejsza ilość bitcoina.</p>'
-                f'<div class="tw"><table class="tbl"><tr><th></th><th>Lepszy od regularnego kupowania</th><th>Stosunek do niego: mediana (10–90%)</th>'
-                f'<th>Lepszy od ślepego portfela</th><th>Najgorszy spadek vs regularne</th><th>Najgorszy spadek vs ślepy</th></tr>{wr}</table></div>'
-                f'<p class="note"><b>Wniosek:</b> aktywny portfel wygrywa z regularnym kupowaniem w mniej niż połowie okien, a jego płytsze dołki biorą się z trzymania mniej BTC '
-                f'(względem ślepego portfela różnica w dołkach jest bliska zera). Za to od ślepego portfela o tej samej ekspozycji jest zwykle lepszy, więc sygnały nie są bezużyteczne. '
+        citxt = (f'On the exam the active portfolio earned on average {pl(ci["mean_ann"])} a year more than regular buying, but the 90% confidence interval '
+                 f'runs from {pl(ci["lo_ann"])} to {pl(ci["hi_ann"])}: zero lies inside it, so this is not proof of an edge. ') if ci else ""
+        h1n = (f'A simple average of the three strategies (1/N) does almost as well as the weights learned by the Hedge algorithm: {rr(rb["1n"]["since2018"])} vs {rr(rb["hedge"]["since2018"])} '
+               f'since 2018 (ratio to regular buying), so “learning” the weights adds little for now. ') if rb.get("1n") and rb.get("hedge") else ""
+        out += (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Skill or luck?</h3>'
+                f'<p class="muted sm" style="margin:0 0 10px">One result from one start date says little. That is why we run the same rules from the start of every month since 2014 '
+                f'and compare them not only with regular buying, but also with a “blind” portfolio that holds a fixed BTC share equal to the active portfolio\'s average share '
+                f'(about {pc(r2["avg_w"])}) and ignores all signals. Only an edge over that one shows that the signals add something, rather than just holding less bitcoin.</p>'
+                f'<div class="tw"><table class="tbl"><tr><th></th><th>Better than regular buying</th><th>Ratio to it: median (10–90%)</th>'
+                f'<th>Better than the blind portfolio</th><th>Worst drop vs regular buying</th><th>Worst drop vs blind</th></tr>{wr}</table></div>'
+                f'<p class="note"><b>Conclusion:</b> the active portfolio beats regular buying in fewer than half of the windows, and its shallower dips come from holding less BTC '
+                f'(compared with the blind portfolio the difference in dips is close to zero). On the other hand, it usually beats the blind portfolio with the same exposure, so the signals are not useless. '
                 f'{citxt}{h1n}</p>'
-                f'<h3 class="ct" style="margin-top:18px">Jak bardzo wynik zależy od wyboru okna trendu?</h3>'
-                f'<p class="muted sm" style="margin:0 0 10px">Sama reguła trendu (100% w BTC po wzroście w ostatnich N dniach, inaczej 25%), stosunek wartości do regularnego kupowania. '
-                f'Okno 28 dni wybraliśmy, znając historię, a wynik mocno zależy od tego wyboru: to ostrzeżenie przed traktowaniem liczby „od 2018” jak dowodu.</p>'
-                f'<div class="tw"><table class="tbl"><tr><th>Okno trendu</th><th>Od 2018</th><th>Egzamin (od 29.10.2024)</th></tr>{fr}</table></div></div>')
+                f'<h3 class="ct" style="margin-top:18px">How much does the result depend on the choice of trend window?</h3>'
+                f'<p class="muted sm" style="margin:0 0 10px">The trend rule on its own (100% in BTC after a rise over the last N days, otherwise 25%), as a ratio of value to regular buying. '
+                f'We chose the 28-day window knowing the history, and the result depends heavily on that choice: a warning against treating the “since 2018” figure as proof.</p>'
+                f'<div class="tw"><table class="tbl"><tr><th>Trend window</th><th>Since 2018</th><th>Exam (from Oct 29, 2024)</th></tr>{fr}</table></div></div>')
     return out
 
 
 def plan_data(df):
-    """Miesięczne ceny BTC w złotych (kurs USD/PLN z Yahoo) do symulatora wpłat."""
+    """Monthly BTC prices in zloty (USD/PLN rate from Yahoo) for the deposit simulator."""
     import world
     try:
         w = pd.read_csv(world.WORLD_CSV, index_col=0, parse_dates=True)["y_pln"]
@@ -1307,13 +1298,13 @@ def _bars(rows, scale=0.6):
 
 
 def extra_html():
-    """Kafelki z dodatkowymi sygnałami: płynność dolara, stablecoiny, giełdy, Lightning, pozycje funduszy, kosmos, dzikie karty."""
+    """Tiles with extra signals: dollar liquidity, stablecoins, exchanges, Lightning, fund positions, space weather, wild cards."""
     import extra as XT
     import world as W
     if not XT.OUT.exists():
         return ""
     x = pd.read_csv(XT.OUT, index_col=0, parse_dates=True)
-    pl = lambda v, d=1: f"{v:+.{d}f}".replace(".", ",")
+    pl = lambda v, d=1: f"{v:+.{d}f}"
     tiles = []
 
     def chg(col, days, title, note, scale=1.0):
@@ -1327,153 +1318,150 @@ def extra_html():
         c = (s / s.shift(days) - 1).dropna() * 100
         tiles.append((title, pl(float(c.iloc[-1])) + "%", float((c < c.iloc[-1]).mean()), note))
 
-    chg("x_netliq", 30, "Płynność dolara netto (miesiąc)", "Pieniądz, który Fed wpompował w system, minus to, co leży na koncie rządu i w reverse repo. Wzrost zwykle sprzyja ryzykownym aktywom.")
-    chg("x_usdt", 30, "Nowe dolary cyfrowe: USDT (miesiąc)", "Ile przybyło Tethera. Nowe stablecoiny to „gotówka” czekająca na zakupy krypto.")
-    chg("x_exsupply", 30, "Bitcoiny leżące na giełdach (miesiąc)", "Spadek oznacza, że ludzie wypłacają monety do własnych portfeli, czyli raczej trzymają, niż sprzedają.")
-    chg("x_tvl", 30, "Pieniądze w DeFi (miesiąc)", "Wartość zablokowana w zdecentralizowanych finansach. Pokazuje apetyt na ryzyko w całym świecie krypto.")
-    chg("x_ln_cap", 90, "Sieć Lightning (3 miesiące)", "Ile bitcoinów zablokowano w szybkiej sieci płatności. Miara faktycznego używania BTC do płacenia.")
-    for col, title in (("x_cot_es", "Fundusze lewarowane na S&P 500"), ("x_cot_jy", "Fundusze lewarowane na jenie")):
+    chg("x_netliq", 30, "Net dollar liquidity (month)", "Money the Fed has pumped into the system, minus what sits in the government's account and in reverse repo. A rise usually favours risky assets.")
+    chg("x_usdt", 30, "New digital dollars: USDT (month)", "How much Tether has grown. New stablecoins are “cash” waiting to buy crypto.")
+    chg("x_exsupply", 30, "Bitcoins sitting on exchanges (month)", "A fall means people are withdrawing coins to their own wallets, so they are more likely holding than selling.")
+    chg("x_tvl", 30, "Money in DeFi (month)", "Value locked in decentralised finance. It shows the appetite for risk across the whole crypto world.")
+    chg("x_ln_cap", 90, "Lightning Network (3 months)", "How many bitcoins are locked in the fast payment network. A measure of how much BTC is actually used for payments.")
+    for col, title in (("x_cot_es", "Leveraged funds on the S&P 500"), ("x_cot_jy", "Leveraged funds on the yen")):
         if col in x and x[col].notna().sum() > 50:
             s = x[col].dropna()
             tiles.append((title, pl(float(s.iloc[-1]), 0) + "%", float((s < s.iloc[-1]).mean()),
-                          "Pozycja netto funduszy hedgingowych jako % rynku (dane CFTC). Skrajne wartości bywają przed gwałtownym odwróceniem."
-                          + (" Duże zakłady przeciw jenowi kończyły się wcześniej nagłym „odkręcaniem” i spadkami ryzykownych aktywów (sierpień 2024)." if col == "x_cot_jy" else "")))
+                          "Net position of hedge funds as a % of the market (CFTC data). Extreme values have often come before a sharp reversal."
+                          + (" Big bets against the yen have in the past ended in a sudden “unwind” and falls in risky assets (August 2024)." if col == "x_cot_jy" else "")))
     if "x_kp" in x:
         s = x["x_kp"].dropna()
         k30 = s.rolling(30).mean()
-        tiles.append(("Burze magnetyczne na Słońcu (30 dni)", f"{k30.iloc[-1]:.1f}".replace(".", ","), float((k30.dropna() < k30.iloc[-1]).mean()),
-                      "Średni indeks Kp. To „dzika karta”: niektóre badania łączą burze geomagnetyczne z nastrojami inwestorów. Sprawdzamy, nie zakładamy."))
+        tiles.append(("Geomagnetic storms from the Sun (30 days)", f"{k30.iloc[-1]:.1f}", float((k30.dropna() < k30.iloc[-1]).mean()),
+                      "Average Kp index. This is a “wild card”: some studies link geomagnetic storms with investor mood. We check it, we do not assume it."))
     today = pd.Timestamp.now().normalize()
     st = W.static_series(pd.date_range(today - pd.Timedelta(days=60), today + pd.Timedelta(days=60)))
     m = st["cal_mercury"]
     now = bool(m.loc[today])
     nxt = m.loc[today:]
     change = nxt.index[nxt != nxt.iloc[0]]
-    mon = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"]
-    when = f"{change[0].day} {mon[change[0].month - 1]}" if len(change) else "?"
-    tiles.append(("Retrogradacja Merkurego", "trwa" if now else "nie trwa", None,
-                  ("Kończy się " if now else "Następna od ") + when + ". Astrologia nie ma podstaw naukowych; śledzimy ją tylko po to, by sprawdzić, czy tłum w nią wierzący zmienia zachowanie (do tej pory: nie)."))
+    when = f"{MON[change[0].month - 1]} {change[0].day}" if len(change) else "?"
+    tiles.append(("Mercury retrograde", "on" if now else "not on", None,
+                  ("Ends on " if now else "Next one from ") + when + ". Astrology has no scientific basis; we track it only to check whether the crowd that believes in it changes its behaviour (so far: no)."))
     tl = "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b}</b>{_pctbar(c) if c is not None else ""}<span class="muted sm">{d}</span></div>' for a, b, c, d in tiles)
     return f'<div class="tiles3">{tl}</div>'
 
 
 def whales_html(CF, df=None, ens=None):
-    """Ruchy dużych graczy (ETF, Strategy, Hyperliquid) i wynik testu potwierdzającego."""
+    """Moves of big players (ETFs, Strategy, Hyperliquid) and the result of the confirmatory test."""
     import confirm as CO
     import whales as WH
     if not WH.OUT.exists():
-        return '<div class="card empty"><b>Brak danych o dużych graczach</b><p class="muted">Pojawią się przy następnej aktualizacji.</p></div>'
+        return '<div class="card empty"><b>No data on big players</b><p class="muted">It will appear at the next update.</p></div>'
     w = pd.read_csv(WH.OUT, index_col=0, parse_dates=True)
-    mln = lambda v: (f"{v/1e9:+.2f} mld".replace(".", ",") if abs(v) >= 1e9 else f"{v/1e6:+.0f} mln") + " USD"
-    mon = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"]
-    dd = lambda t, y=False: f"{t.day} {mon[t.month - 1]}" + (f" {t.year}" if y else "")
+    mln = lambda v: (f"{v/1e9:+.2f}B" if abs(v) >= 1e9 else f"{v/1e6:+.0f}M") + " USD"
+    dd = lambda t, y=False: f"{MON[t.month - 1]} {t.day}" + (f", {t.year}" if y else "")
     tiles = []
     if "w_etf_flow" in w:
         f = w["w_etf_flow"].dropna()
         f5, f20 = f.rolling(5).sum(), f.rolling(20).sum()
-        tiles.append((f"Fundusze ETF: ostatnia sesja ({dd(f.index[-1])})", mln(f.iloc[-1]), float((f < f.iloc[-1]).mean()),
-                      "Ile pieniędzy wpłynęło (plus) lub wypłynęło (minus) ze wszystkich amerykańskich funduszy ETF na bitcoina w jeden dzień."))
-        tiles.append(("Fundusze ETF: ostatni miesiąc (20 sesji)", mln(f20.iloc[-1]), float((f20.dropna() < f20.iloc[-1]).mean()),
-                      (f"Z tego BlackRock (IBIT): {mln(w['w_etf_ibit'].dropna().iloc[-20:].sum())}. " if "w_etf_ibit" in w else "")
-                      + "Badania pokazują, że te pieniądze raczej podążają za ceną, niż ją wyprzedzają."))
+        tiles.append((f"ETFs: last session ({dd(f.index[-1])})", mln(f.iloc[-1]), float((f < f.iloc[-1]).mean()),
+                      "How much money flowed into (plus) or out of (minus) all US bitcoin ETFs in one day."))
+        tiles.append(("ETFs: last month (20 sessions)", mln(f20.iloc[-1]), float((f20.dropna() < f20.iloc[-1]).mean()),
+                      (f"Of which BlackRock (IBIT): {mln(w['w_etf_ibit'].dropna().iloc[-20:].sum())}. " if "w_etf_ibit" in w else "")
+                      + "Research shows that this money tends to follow the price rather than lead it."))
         if "w_etf_aum" in w and w["w_etf_aum"].notna().any():
             a = w["w_etf_aum"].dropna()
-            tiles.append(("Fundusze ETF: ile mają łącznie", f"{a.iloc[-1]/1e9:.0f} mld USD", None,
-                          f"Wartość bitcoinów trzymanych przez wszystkie fundusze ETF w USA. Ostatnie 5 sesji: {mln(f5.iloc[-1])}."))
+            tiles.append(("ETFs: how much they hold in total", f"{a.iloc[-1]/1e9:.0f}B USD", None,
+                          f"Value of the bitcoins held by all US ETFs. Last 5 sessions: {mln(f5.iloc[-1])}."))
     if "w_mstr_btc" in w:
         m = w[["w_mstr_btc", "w_mstr_total"]].dropna()
         last = m.iloc[-1]
         b90 = m.loc[m.index >= m.index[-1] - pd.Timedelta(days=90), "w_mstr_btc"].sum()
-        verb = "kupiła" if last["w_mstr_btc"] > 0 else "sprzedała"
-        tiles.append(("Strategy (Michael Saylor): stan posiadania", f"{last['w_mstr_total']:,.0f} BTC".replace(",", " "), None,
-                      f"Ostatnio {verb} {abs(last['w_mstr_btc']):,.0f} BTC (raport z {dd(m.index[-1], True)}). ".replace(",", " ")
-                      + f"Bilans 3 miesięcy: {b90:+,.0f} BTC. W 2026 roku stan posiadania firmy kilka razy spadł po sprzedażach; wcześniej sprzedała tylko raz, w grudniu 2022, i od razu dokupiła więcej.".replace(",", " ")))
+        verb = "bought" if last["w_mstr_btc"] > 0 else "sold"
+        tiles.append(("Strategy (Michael Saylor): holdings", f"{last['w_mstr_total']:,.0f} BTC", None,
+                      f"Most recently {verb} {abs(last['w_mstr_btc']):,.0f} BTC (report of {dd(m.index[-1], True)}). "
+                      + f"Balance over 3 months: {b90:+,.0f} BTC. In 2026 the company's holdings fell several times after sales; before that it had sold only once, in December 2022, and immediately bought more."))
     if "w_hl_smart" in w and w["w_hl_smart"].notna().any():
         s, d = w["w_hl_smart"].dropna(), w["w_hl_dumb"].dropna()
-        side = lambda v: "na wzrost" if v > 0 else "na spadek"
-        tiles.append(("Najlepsi traderzy Hyperliquid", side(s.iloc[-1]), None,
-                      f"{WH.TOP} kont z największym zyskiem w historii. Ich łączna pozycja na BTC to {s.iloc[-1]:+.0f}% całego rynku tej giełdy; "
-                      f"{w['w_hl_smart_longpct'].dropna().iloc[-1]:.0f}% z nich gra na wzrost."))
-        tiles.append(("Najgorsi traderzy Hyperliquid", side(d.iloc[-1]), None,
-                      f"{WH.TOP} kont z największą stratą. Pozycja {d.iloc[-1]:+.0f}% rynku; {w['w_hl_dumb_longpct'].dropna().iloc[-1]:.0f}% gra na wzrost. "
-                      f"Nagrywamy od {dd(s.index[0], True)}, bo giełda nie udostępnia historii."))
+        side = lambda v: "betting on a rise" if v > 0 else "betting on a fall"
+        tiles.append(("Best Hyperliquid traders", side(s.iloc[-1]), None,
+                      f"The {WH.TOP} accounts with the biggest all-time profit. Their combined BTC position is {s.iloc[-1]:+.0f}% of this exchange's whole market; "
+                      f"{w['w_hl_smart_longpct'].dropna().iloc[-1]:.0f}% of them are betting on a rise."))
+        tiles.append(("Worst Hyperliquid traders", side(d.iloc[-1]), None,
+                      f"The {WH.TOP} accounts with the biggest loss. Position {d.iloc[-1]:+.0f}% of the market; {w['w_hl_dumb_longpct'].dropna().iloc[-1]:.0f}% are betting on a rise. "
+                      f"We have been recording since {dd(s.index[0], True)}, because the exchange does not provide history."))
     if "w_hl_fund" in w:
         h = w["w_hl_fund"].dropna()
         h7 = h.rolling(7).mean().dropna()
-        tiles.append(("Opłata za grę na wzrost (Hyperliquid, 7 dni)", f"{h7.iloc[-1]:+.1f}% rocznie".replace(".", ","), float((h7 < h7.iloc[-1]).mean()),
-                      "Gdy chętnych do gry na wzrost jest dużo, płacą oni pozostałym. Wysoka opłata oznacza tłok po jednej stronie."))
+        tiles.append(("Fee for betting on a rise (Hyperliquid, 7 days)", f"{h7.iloc[-1]:+.1f}% per year", float((h7 < h7.iloc[-1]).mean()),
+                      "When many people want to bet on a rise, they pay the others. A high fee means a crowd on one side."))
     tl = "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b}</b>{_pctbar(c) if c is not None else ""}<span class="muted sm">{d}</span></div>' for a, b, c, d in tiles)
-    # znane portfele (rządy): sald nie da się podrobić, każdy adres zweryfikowany z raportami
+    # known wallets (governments): balances cannot be faked, every address checked against reports
     ent, epi = [], ""
-    sp = lambda v: f"{v:,.0f}".replace(",", " ")
+    sp = lambda v: f"{v:,.0f}"
     if "w_ent_us" in w and w["w_ent_us"].notna().any():
         u = w["w_ent_us"].dropna()
         moved = u.index[u.diff().abs() > 1]
-        ent.append(("Rząd USA: bitcoiny z Silk Road", f"{sp(u.iloc[-1])} BTC",
-                    f"Monety ukradzione z czarnego rynku Silk Road i odebrane hakerowi w listopadzie 2020. "
-                    + (f"Ostatni duży ruch: {dd(moved[-1], True)}." if len(moved) else "Nikt ich nie ruszył od 2020 roku.")
-                    + " Ich sprzedaż byłaby dużą podażą; od 2025 r. USA deklarują ich trzymanie w rezerwie strategicznej."))
+        ent.append(("US government: bitcoins from Silk Road", f"{sp(u.iloc[-1])} BTC",
+                    f"Coins stolen from the Silk Road black market and seized from a hacker in November 2020. "
+                    + (f"Last big move: {dd(moved[-1], True)}." if len(moved) else "Nobody has touched them since 2020.")
+                    + " Selling them would mean a lot of supply; since 2025 the US has said it will keep them in a strategic reserve."))
     if "w_ent_sv" in w and w["w_ent_sv"].notna().any():
         v = w["w_ent_sv"].dropna()
         na = int(w["w_ent_sv_n"].dropna().iloc[-1]) if "w_ent_sv_n" in w and w["w_ent_sv_n"].notna().any() else None
-        ent.append(("Salwador: rezerwa państwa", f"{sp(v.iloc[-1])} BTC",
-                    f"W ostatnich 30 dniach {v.iloc[-1] - v.iloc[-31]:+.0f} BTC (kraj kupuje po 1 BTC dziennie). "
-                    + (f"Liczymy z {na} adresów, które Salwador sam publikuje." if na else "")))
+        ent.append(("El Salvador: state reserve", f"{sp(v.iloc[-1])} BTC",
+                    f"Over the last 30 days {v.iloc[-1] - v.iloc[-31]:+.0f} BTC (the country buys 1 BTC a day). "
+                    + (f"We count it from {na} addresses that El Salvador publishes itself." if na else "")))
     if "w_ent_de" in w and w["w_ent_de"].notna().any():
         g = w["w_ent_de"].dropna()
-        ent.append(("Niemcy: bitcoiny przejęte przez policję", f"{sp(g.iloc[-1])} BTC",
-                    f"W styczniu 2024 policja przejęła {sp(g.max())} BTC od twórców pirackiego serwisu Movie2k i sprzedała je w 3,5 tygodnia (19 cze – 12 lip 2024)."))
+        ent.append(("Germany: bitcoins seized by the police", f"{sp(g.iloc[-1])} BTC",
+                    f"In January 2024 the police seized {sp(g.max())} BTC from the operators of the pirate site Movie2k and sold them within 3.5 weeks (Jun 19 – Jul 12, 2024)."))
         if df is not None:
             c = df["close"]
             a0, a1 = c.asof(pd.Timestamp("2024-06-18")), c.asof(pd.Timestamp("2024-07-12"))
             lo = c["2024-06-18":"2024-07-12"]
             a2 = c.asof(pd.Timestamp("2024-08-11"))
-            epi = (f'<p class="note"><b>Co robiła cena, gdy Niemcy sprzedawali?</b> Od dnia przed pierwszą sprzedażą do jej końca: {(a1 / a0 - 1) * 100:+.0f}%, '
-                   f'z dołkiem {(lo.min() / a0 - 1) * 100:+.0f}% ({dd(lo.idxmin())}). W miesiąc po zakończeniu: {(a2 / a1 - 1) * 100:+.0f}%. '
-                   f'W tym samym czasie Mt. Gox zaczął oddawać bitcoiny wierzycielom, więc nie da się oddzielić obu wpływów. '
-                   f'To jeden epizod, a z jednego przypadku nie wyciągamy reguły.</p>')
+            epi = (f'<p class="note"><b>What did the price do while Germany was selling?</b> From the day before the first sale to its end: {(a1 / a0 - 1) * 100:+.0f}%, '
+                   f'with a low of {(lo.min() / a0 - 1) * 100:+.0f}% ({dd(lo.idxmin())}). In the month after it ended: {(a2 / a1 - 1) * 100:+.0f}%. '
+                   f'At the same time Mt. Gox started returning bitcoins to its creditors, so the two effects cannot be separated. '
+                   f'This is a single episode, and we do not draw a rule from a single case.</p>')
     if ent:
         tl += "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b}</b><span class="muted sm">{d}</span></div>' for a, b, d in ent)
     tbl = ""
     if CF:
-        lab = {"confirmed": ("potwierdzona", "pos"), "rejected": ("nie potwierdzona", "muted"), "reverse": ("działa odwrotnie", "neg"),
-               "collect": ("zbieramy dane", "muted"), "retired": ("wygasła, już nie używamy", "muted")}
+        lab = {"confirmed": ("confirmed", "pos"), "rejected": ("not confirmed", "muted"), "reverse": ("works the other way round", "neg"),
+               "collect": ("collecting data", "muted"), "retired": ("expired, no longer used", "muted")}
         rows = ""
         for r in CF["rows"]:
             st, cls = lab[r["status"]]
-            mde = f' Ten test wykryłby korelację od ok. {r["mde_rho"]:.2f} wzwyż.' if r.get("mde_rho") else ""
+            mde = f' This test would detect a correlation of about {r["mde_rho"]:.2f} or more.' if r.get("mde_rho") else ""
             if r["status"] == "collect":
-                det = f'{r["n"]} z {r.get("min_n", CO.MIN_DAYS)} dni' + (f' (liczone od {r["from"]})' if r.get("from") else "") + "." + mde
+                det = f'{r["n"]} of {r.get("min_n", CO.MIN_DAYS)} days' + (f' (counted from {r["from"]})' if r.get("from") else "") + "." + mde
             else:
-                okres = {1: "następny dzień", 7: "tydzień"}.get(r["h"], "miesiąc")
+                okres = {1: "the next day", 7: "a week"}.get(r["h"], "a month")
                 fp = lambda p: f"{p:.4f}" if p < 0.01 else f"{p:.2f}"
-                hac = f', z poprawką Neweya-Westa {fp(r["p_hac"])}' if r.get("p_hac") is not None else ""
+                hac = f', with the Newey-West correction {fp(r["p_hac"])}' if r.get("p_hac") is not None else ""
                 if r.get("target") == "drop10":
-                    det = (f'korelacja {r["r"]:+.2f}, p = {fp(r["p"])}{hac}. Spadek o 10% w ciągu 30 dni zdarzał się w {r["ret_lo"]:.0f}% przypadków '
-                           f'przy najniższych wartościach i w {r["ret_hi"]:.0f}% przy najwyższych.').replace(".", ",").replace(", Spadek", ". Spadek") + mde
+                    det = (f'correlation {r["r"]:+.2f}, p = {fp(r["p"])}{hac}. A 10% drop within 30 days happened in {r["ret_lo"]:.0f}% of cases '
+                           f'at the lowest values and in {r["ret_hi"]:.0f}% at the highest.') + mde
                 elif r.get("target") == "volratio":
-                    det = (f'korelacja {r["r"]:+.2f}, p = {fp(r["p"])}{hac}. W typowym tygodniu po najniższych wartościach wahania były {r["ret_lo"]:+.0f}% '
-                           f'względem prognozy z przeszłości, po najwyższych {r["ret_hi"]:+.0f}%').replace(".", ",").replace(", W typowym", ". W typowym") + "." + mde
+                    det = (f'correlation {r["r"]:+.2f}, p = {fp(r["p"])}{hac}. In a typical week after the lowest values the swings were {r["ret_lo"]:+.0f}% '
+                           f'relative to the forecast from the past, after the highest {r["ret_hi"]:+.0f}%') + "." + mde
                 else:
-                    det = (f'korelacja {r["r"]:+.2f}, p = {fp(r["p"])}{hac}. Średni zwrot BTC przez {okres} po najniższych wartościach: {r["ret_lo"]:+.1f}%, '
-                           f'po najwyższych: {r["ret_hi"]:+.1f}%.').replace(".", ",").replace(", Średni", ". Średni").rstrip(",") + mde
+                    det = (f'correlation {r["r"]:+.2f}, p = {fp(r["p"])}{hac}. Average BTC return over {okres} after the lowest values: {r["ret_lo"]:+.1f}%, '
+                           f'after the highest: {r["ret_hi"]:+.1f}%.') + mde
                 hl_ = r.get("health") or {}
                 if hl_.get("now"):
                     nw = hl_["now"]
-                    det += (f' Zdrowie (ostatnie 3 lata): korelacja {nw["rho"]:+.2f}, p {nw["p_hac"]:.2f}; '
-                            f'przegląd emerytalny {hl_["next_check"]}.')
+                    det += (f' Health (last 3 years): correlation {nw["rho"]:+.2f}, p {nw["p_hac"]:.2f}; '
+                            f'retirement review {hl_["next_check"]}.')
             rows += f'<tr><td><b>{r["id"]}</b></td><td>{html.escape(r["text"])}</td><td class="{cls}"><b>{st}</b></td><td class="sm muted">{det}</td></tr>'
         nc = len(CF["confirmed"])
         ids = [r["id"] for r in CF["rows"] if r["status"] == "confirmed"]
         vids = [r["id"] for r in CF["rows"] if r["status"] == "confirmed" and r.get("target") == "volratio"]
         big = any(r["status"] == "confirmed" and r.get("batch") == 1 for r in CF["rows"])
-        verdict = ((f"Test przeszły: {', '.join(ids)}. " if ids else "Żadna hipoteza nie przeszła testu. ")
-                   + ("" if big else "Żadna hipoteza o dużych graczach nie przeszła, co jest zgodne z badaniami: kupujący w ETF podążają za ceną, a nie ją wyprzedzają. ")
-                   + ("Potwierdzone sygnały trafiają do zespołu metod jako osobna metoda, z tą samą bramką co reszta: wpływają na prognozę tylko, jeśli w teście „jak na żywo” istotnie ją poprawiają. " if nc else "")
-                   + (f"{', '.join(vids)} mówią o sile wahań, nie o kierunku: zapowiadają tydzień burzliwszy, niż wynika z samej przeszłości. Korelacja jest jednak słaba "
-                      "i do modelu zmienności trafiłyby dopiero, gdyby poprawiły jego prognozę na odłożonych danych. Minusy przy tych hipotezach są normalne: "
-                      "typowy tydzień jest spokojniejszy od średniej, którą zawyżają rzadkie wybuchy; liczy się różnica między niskimi a wysokimi wartościami." if vids else ""))
-        thr = f'{CF["alpha_each"]:.3f}'.replace(".", ",")
+        verdict = ((f"Passed the test: {', '.join(ids)}. " if ids else "No hypothesis passed the test. ")
+                   + ("" if big else "No hypothesis about big players passed, which is in line with research: ETF buyers follow the price rather than lead it. ")
+                   + ("Confirmed signals go into the team of methods as a separate method, with the same gate as the rest: they affect the forecast only if they significantly improve it in the “as if live” test. " if nc else "")
+                   + (f"{', '.join(vids)} are about the strength of swings, not direction: they point to a stormier week than the past alone would suggest. The correlation is weak, though, "
+                      "and they would only go into the volatility model if they improved its forecast on held-out data. The minus signs for these hypotheses are normal: "
+                      "a typical week is calmer than the average, which is pushed up by rare outbursts; what matters is the difference between low and high values." if vids else ""))
         decay = ""
         if any(r["id"] == "H7" and r["status"] == "confirmed" for r in CF["rows"]) and df is not None:
             lc = np.log(df["close"])
@@ -1484,43 +1472,43 @@ def whales_html(CF, df=None, ens=None):
                 k = x.notna() & yy.notna()
                 q = pd.qcut(x[k].rank(method="first"), 3, labels=False)
                 r_ = (np.exp(yy[k]) - 1) * 100
-                seg.append(f"{a}–{b}: {r_[q == 2].mean():+.1f}% po wzrostach vs {r_[q == 0].mean():+.1f}% po spadkach".replace(".", ","))
-            decay = (f'<p class="note"><b>Trend (H7) przeszedł test, ale słabnie.</b> Średni zwrot w kolejnym tygodniu: {"; ".join(seg)}. '
-                     f'To typowe: wzorzec, który zna coraz więcej osób, z czasem się wyczerpuje. ')
+                seg.append(f"{a}–{b}: {r_[q == 2].mean():+.1f}% after rises vs {r_[q == 0].mean():+.1f}% after falls")
+            decay = (f'<p class="note"><b>The trend (H7) passed the test, but it is weakening.</b> Average return in the following week: {"; ".join(seg)}. '
+                     f'This is typical: a pattern that more and more people know about wears out over time. ')
             cs = None
             if ens and "7" in {str(k) for k in ens.get("horizons", {})}:
                 v7 = ens["horizons"].get(7) or ens["horizons"].get("7")
                 cs = next((r["skill"] for r in v7["table"] if r["model"] == "conf"), None)
             if cs is not None and cs <= 0.005:
-                decay += (f'Jako metoda prognozy trend jest w zespole, ale w teście „jak na żywo” od 2015 roku nie poprawia prognozy na tydzień '
-                          f'({cs * 100:+.1f}%), więc teraz nie wpływa na wynik. Korelacja jest prawdziwa, ale za słaba, żeby przesunąć cały rozkład cen.</p>').replace(f"{cs * 100:+.1f}%", f"{cs * 100:+.1f}%".replace(".", ","))
+                decay += (f'As a forecasting method the trend is in the team, but in the “as if live” test since 2015 it does not improve the one-week forecast '
+                          f'({cs * 100:+.1f}%), so for now it does not affect the result. The correlation is real, but too weak to shift the whole price distribution.</p>')
             else:
-                decay += 'Model używa go jako jednej z metod i tylko wtedy, gdy w teście „jak na żywo” poprawia prognozę.</p>'
+                decay += 'The model uses it as one of the methods, and only when it improves the forecast in the “as if live” test.</p>'
         batches = sorted({r.get("batch", 1) for r in CF["rows"]})
-        thrs = ", ".join(f'{min(r["alpha"] for r in CF["rows"] if r.get("batch", 1) == b):.4f}'.replace(".", ",") + f" w partii {b}" for b in batches)
-        tbl = (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Testy potwierdzające: duzi gracze, trend, opcje, stablecoiny i siła wahań</h3>'
-               f'<p class="muted sm" style="margin:0 0 10px">Hipotezy spisaliśmy 29 października 2026, zanim zobaczyliśmy wyniki, i nie zmieniamy ich po fakcie. '
-               f'Partia 1 (H1–H6) dotyczy dużych graczy, partia 2 (H7–H10) efektów najlepiej opisanych w badaniach nad Bitcoinem, '
-               f'partia 3 (H11–H13) pomysłów z przeglądu badań: stablecoinów i rynku opcji (asymetria opcji H13 jest odtworzona z archiwum transakcji Deribit od 2018 roku), '
-               f'partia 4 (H14) to kontynuacja trendu na nowych danych, partia 5 (H15–H17) sprawdza, czy duża dźwignia na giełdzie Binance zapowiada krach (spadek o 10% w 30 dni), a nie kierunek, '
-               f'a partia 6 (H18–H21, spisana 31.10.2026) dotyczy siły wahań: czy w kolejnym tygodniu będą większe, niż przewiduje sama zmienność z przeszłości. '
-               f'Każda hipoteza ma z góry wpisany kierunek. Żeby uznać ją za prawdziwą, wynik musi być bardzo mało prawdopodobny jako przypadek '
-               f'(p poniżej {thrs}) i powtórzyć się w obu połowach historii. Dane z dnia D wchodzą do testu dopiero od dnia D+1. '
-               f'Dla porównania podajemy też p z poprawką Neweya-Westa na nakładające się zwroty: zwykle wychodzi niższe, czyli nasza metoda jest ostrożniejsza. '
-               f'Przy każdej hipotezie piszemy, jak silny efekt test w ogóle mógłby wykryć: „nie potwierdzona” przy słabym teście nie znaczy „efektu nie ma”, tylko „nie da się go wykazać”. '
-               f'H14 to H7 sprawdzana wyłącznie na danych po dniu jej zapisania: to jedyny czysty dowód. Potwierdzone sygnały mają też regułę emerytury, spisaną 30.10.2026: '
-               f'jeśli na dwóch kolejnych corocznych przeglądach (od 29.10.2027) w ostatnich 3 latach będą zarówno nieistotne (p &gt; 0,10), jak i słabe (korelacja &lt; 0,03), przestajemy ich używać.</p>'
-               + f'<div class="tw"><table class="tbl"><tr><th></th><th>Hipoteza</th><th>Wynik</th><th>Szczegóły</th></tr>{rows}</table></div>'
-               f'<p class="note"><b>Wniosek:</b> {verdict}</p>{decay}'
-               f'<p class="muted sm" style="margin:8px 0 0">Źródła: <a href="https://www.tftc.io/bitcoin-etf-flows" target="_blank" rel="noopener">TFTC Bitcoin ETF Tracker</a> (wolna licencja Creative Commons), '
-               f'<a href="https://bitbo.io/treasuries/microstrategy/" target="_blank" rel="noopener">Bitbo</a> (transakcje Strategy wg raportów 8-K), publiczne API Hyperliquid, salda portfeli z blockchaina (mempool.space; adresy Salwadoru z bitcoin.gob.sv). '
-               f'Mt. Gox nie ma kafelka: jego bitcoiny są rozrzucone po wielu adresach, których pełnej listy nie da się wiarygodnie ustalić.</p></div>')
+        thrs = ", ".join(f'{min(r["alpha"] for r in CF["rows"] if r.get("batch", 1) == b):.4f}' + f" in batch {b}" for b in batches)
+        tbl = (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Confirmatory tests: big players, trend, options, stablecoins and the strength of swings</h3>'
+               f'<p class="muted sm" style="margin:0 0 10px">We wrote down the hypotheses on Oct 29, 2026, before seeing the results, and we do not change them after the fact. '
+               f'Batch 1 (H1–H6) is about big players, batch 2 (H7–H10) about the effects best described in research on Bitcoin, '
+               f'batch 3 (H11–H13) about ideas from a review of research: stablecoins and the options market (the options skew in H13 is reconstructed from the Deribit trade archive since 2018), '
+               f'batch 4 (H14) is the trend continued on new data, batch 5 (H15–H17) checks whether high leverage on the Binance exchange signals a crash (a 10% drop within 30 days), rather than direction, '
+               f'and batch 6 (H18–H21, written down on Oct 31, 2026) is about the strength of swings: whether next week they will be bigger than past volatility alone predicts. '
+               f'Each hypothesis has its direction written down in advance. To accept it as true, the result must be very unlikely to be luck '
+               f'(p below {thrs}) and repeat in both halves of history. Data from day D enters the test only from day D+1. '
+               f'For comparison we also give p with the Newey-West correction for overlapping returns: it usually comes out lower, which means our method is the more cautious one. '
+               f'For each hypothesis we state how strong an effect the test could detect at all: “not confirmed” with a weak test does not mean “there is no effect”, only “it cannot be shown”. '
+               f'H14 is H7 checked only on data after the day it was written down: it is the only clean proof. Confirmed signals also have a retirement rule, written down on Oct 30, 2026: '
+               f'if at two consecutive annual reviews (from Oct 29, 2027) they are both insignificant (p &gt; 0.10) and weak (correlation &lt; 0.03) over the last 3 years, we stop using them.</p>'
+               + f'<div class="tw"><table class="tbl"><tr><th></th><th>Hypothesis</th><th>Result</th><th>Details</th></tr>{rows}</table></div>'
+               f'<p class="note"><b>Conclusion:</b> {verdict}</p>{decay}'
+               f'<p class="muted sm" style="margin:8px 0 0">Sources: <a href="https://www.tftc.io/bitcoin-etf-flows" target="_blank" rel="noopener">TFTC Bitcoin ETF Tracker</a> (free Creative Commons licence), '
+               f'<a href="https://bitbo.io/treasuries/microstrategy/" target="_blank" rel="noopener">Bitbo</a> (Strategy transactions according to 8-K reports), the public Hyperliquid API, wallet balances from the blockchain (mempool.space; El Salvador\'s addresses from bitcoin.gob.sv). '
+               f'Mt. Gox has no tile: its bitcoins are spread across many addresses, and the full list cannot be reliably established.</p></div>')
     return f'<div class="tiles3">{tl}</div>{epi}{tbl}'
 
 
 def markets_html(M, df):
     if not M:
-        return '<div class="card empty"><b>Brak danych z rynków akcji i obligacji</b><p class="muted">Pojawią się przy następnej aktualizacji.</p></div>'
+        return '<div class="card empty"><b>No data from stock and bond markets</b><p class="muted">It will appear at the next update.</p></div>'
     f = M["feat"]
 
     def lastp(col):
@@ -1529,54 +1517,49 @@ def markets_html(M, df):
     tiles = []
     v, p = lastp("breadth200")
     if v is not None:
-        tiles.append(("Ile spółek z S&P 500 jest w trendzie wzrostowym?", f"{v:.0f}%", p, "Tyle spółek ma cenę powyżej swojej średniej z 200 dni. Powyżej 60% to szeroka hossa, poniżej 30% szeroka przecena."))
+        tiles.append(("How many S&P 500 companies are in an uptrend?", f"{v:.0f}%", p, "This many companies have a price above their 200-day average. Above 60% is a broad bull market, below 30% a broad sell-off."))
     v, p = lastp("avgcorr")
     if v is not None:
-        tiles.append(("Czy akcje poruszają się „stadnie”?", f"{v:.2f}".replace(".", ","), p, "Średnia korelacja spółek z ostatnich 60 dni. Wysoka (powyżej 0,4) bywa w panice, gdy wszyscy sprzedają naraz."))
+        tiles.append(("Are stocks moving as a “herd”?", f"{v:.2f}", p, "Average correlation between companies over the last 60 days. It tends to be high (above 0.4) in a panic, when everyone sells at once."))
     if "tnx" in df and "irx" in df and df["tnx"].notna().any():
         cv = float(df["tnx"].dropna().iloc[-1] - df["irx"].dropna().iloc[-1])
         sc = (df["tnx"] - df["irx"]).dropna()
-        tiles.append(("Krzywa rentowności USA (10 lat minus 3 miesiące)", f"{cv:+.2f}".replace(".", ",") + " p.p.", float((sc < cv).mean()),
-                      "Ujemna, czyli „odwrócona” krzywa, historycznie poprzedzała recesje. Dodatnia jest normalna."))
+        tiles.append(("US yield curve (10 years minus 3 months)", f"{cv:+.2f}" + " pp", float((sc < cv).mean()),
+                      "A negative, or “inverted”, curve has historically come before recessions. A positive one is normal."))
     if "ratio_credit" in f:
         s = f["ratio_credit"].dropna()
         ch = float((s.iloc[-1] / s.iloc[-22] - 1) * 100)
-        tiles.append(("Apetyt na ryzyko w obligacjach (miesiąc)", f"{ch:+.1f}%".replace(".", ","), float(((s / s.shift(21) - 1) * 100 < ch).mean()),
-                      "Jak zmieniły się obligacje śmieciowe względem bezpiecznych skarbowych. Spadek oznacza ucieczkę od ryzyka."))
+        tiles.append(("Appetite for risk in bonds (month)", f"{ch:+.1f}%", float(((s / s.shift(21) - 1) * 100 < ch).mean()),
+                      "How junk bonds have moved relative to safe government bonds. A fall means a flight from risk."))
     v, p = lastp("updown")
     if v is not None:
-        tiles.append(("Ile spółek wzrosło w ostatnim tygodniu?", f"{v:.0f}%", p, "Odsetek spółek z S&P 500, które są wyżej niż tydzień temu."))
+        tiles.append(("How many companies rose over the last week?", f"{v:.0f}%", p, "Share of S&P 500 companies that are higher than a week ago."))
     v, p = lastp("dispersion")
     if v is not None:
-        tiles.append(("Jak bardzo różnią się wyniki spółek?", f"{v*100:.1f}%".replace(".", ","), p, "Rozrzut miesięcznych zwrotów między spółkami. Wysoki oznacza, że rynek mocno wybiera zwycięzców i przegranych."))
+        tiles.append(("How different are the companies' results?", f"{v*100:.1f}%", p, "Spread of monthly returns between companies. A high value means the market is strongly picking winners and losers."))
     tl = "".join(f'<div class="card tile"><span class="muted sm">{a}</span><b>{b}</b>{_pctbar(c)}<span class="muted sm">{d}</span></div>' for a, b, c, d in tiles)
     cm = M["comove"]
     top = _bars([(r.name or r.sym, r.r) for r in cm["top"].itertuples()])
     bot = _bars([(r.name or r.sym, r.r) for r in cm["bottom"].itertuples()])
-    sec = _bars([(k, v) for k, v in cm["sectors"].items()], scale=0.4)
+    sec = _bars([(k, v) for k, v in cm["sectors"].items()], scale=0.4)          # sector names come in English from the data
     bnd = _bars([(r.name or r.sym, r.r) for r in cm["bonds"].itertuples()], scale=0.4)
-    secs = {"Information Technology": "Technologia", "Financials": "Finanse", "Consumer Discretionary": "Dobra luksusowe", "Communication Services": "Komunikacja",
-            "Industrials": "Przemysł", "Materials": "Surowce", "Energy": "Energetyka", "Real Estate": "Nieruchomości", "Health Care": "Ochrona zdrowia",
-            "Consumer Staples": "Dobra podstawowe", "Utilities": "Użyteczność publiczna"}
-    for en, pl_ in secs.items():
-        sec = sec.replace(f"<b>{en}</b>", f"<b>{pl_}</b>")
     A = M.get("analogs")
     an = ""
     if A and A.get("rows"):
         rows = "".join(f'<tr><td>{r["date"]}</td><td class="{"pos" if r["f30"] >= 0 else "neg"}">{r["f30"]:+.0f}%</td><td class="{"pos" if r["f90"] >= 0 else "neg"}">{r["f90"]:+.0f}%</td></tr>' for r in A["rows"])
         now = A["now"]
-        nows = ", ".join(f'{n_} {now[k]:+.2f}'.replace(".", ",") for k, n_ in (("QQQ", "Nasdaq"), ("TLT", "długie obligacje"), ("GLD", "złoto"), ("UUP", "dolar")) if k in now)
-        an = (f'<div class="panel" style="margin-top:18px"><h3 class="ct">Kiedy powiązania Bitcoina z rynkami wyglądały jak dziś?</h3>'
-              f'<p class="muted sm" style="margin:0 0 10px">Dla każdego dnia liczymy, jak mocno Bitcoin poruszał się razem z {A["n_keys"]} kluczowymi rynkami (akcje, obligacje, złoto, dolar, surowce, kraje) w ostatnich 90 dniach. '
-              f'Dziś na przykład: {nows}. Szukamy okresów z najbardziej podobnym układem tych powiązań (to „analogia analogii”) i patrzymy, co działo się potem. To ciekawostka, nie prognoza.</p>'
-              f'<table class="tbl"><tr><th>Okres</th><th>Cena po 30 dniach</th><th>Cena po 90 dniach</th></tr>{rows}</table>'
-              f'<p class="muted sm" style="margin:10px 0 0">W {A["up30"]*100:.0f}% tych okresów cena po 30 dniach była wyższa; typowo {A["med30"]:+.0f}% po 30 i {A["med90"]:+.0f}% po 90 dniach.</p></div>')
+        nows = ", ".join(f'{n_} {now[k]:+.2f}' for k, n_ in (("QQQ", "Nasdaq"), ("TLT", "long bonds"), ("GLD", "gold"), ("UUP", "dollar")) if k in now)
+        an = (f'<div class="panel" style="margin-top:18px"><h3 class="ct">When did Bitcoin\'s links with markets look like today?</h3>'
+              f'<p class="muted sm" style="margin:0 0 10px">For each day we calculate how closely Bitcoin moved together with {A["n_keys"]} key markets (stocks, bonds, gold, the dollar, commodities, countries) over the last 90 days. '
+              f'Today, for example: {nows}. We look for periods with the most similar pattern of these links (an “analogy of analogies”) and see what happened next. This is a curiosity, not a forecast.</p>'
+              f'<table class="tbl"><tr><th>Period</th><th>Price after 30 days</th><th>Price after 90 days</th></tr>{rows}</table>'
+              f'<p class="muted sm" style="margin:10px 0 0">In {A["up30"]*100:.0f}% of these periods the price was higher after 30 days; typically {A["med30"]:+.0f}% after 30 and {A["med90"]:+.0f}% after 90 days.</p></div>')
     return (f'<div class="tiles3">{tl}</div>'
-            f'<div class="two2" style="margin-top:18px"><div class="panel"><h3 class="ct">Najbardziej podobne do Bitcoina (ostatnie 2 lata, tygodniowo)</h3>'
-            f'<p class="muted sm" style="margin:0 0 8px">Spośród {cm["n"]} spółek i funduszy. 1 = zawsze razem, 0 = niezależnie.</p>{top}'
-            f'<h3 class="ct" style="margin-top:18px">Najbardziej „w przeciwną stronę”</h3>{bot}</div>'
-            f'<div class="panel"><h3 class="ct">Sektory giełdy USA</h3><p class="muted sm" style="margin:0 0 8px">Średnie powiązanie spółek z sektora z Bitcoinem.</p>{sec}'
-            f'<h3 class="ct" style="margin-top:18px">Obligacje</h3><p class="muted sm" style="margin:0 0 8px">Ujemne: gdy obligacje drożeją (ucieczka do bezpieczeństwa), Bitcoin zwykle tanieje.</p>{bnd}</div></div>{an}')
+            f'<div class="two2" style="margin-top:18px"><div class="panel"><h3 class="ct">Most similar to Bitcoin (last 2 years, weekly)</h3>'
+            f'<p class="muted sm" style="margin:0 0 8px">Out of {cm["n"]} companies and funds. 1 = always together, 0 = independent.</p>{top}'
+            f'<h3 class="ct" style="margin-top:18px">Most “in the opposite direction”</h3>{bot}</div>'
+            f'<div class="panel"><h3 class="ct">US stock market sectors</h3><p class="muted sm" style="margin:0 0 8px">Average link between the sector\'s companies and Bitcoin.</p>{sec}'
+            f'<h3 class="ct" style="margin-top:18px">Bonds</h3><p class="muted sm" style="margin:0 0 8px">Negative: when bonds get more expensive (a flight to safety), Bitcoin usually gets cheaper.</p>{bnd}</div></div>{an}')
 
 
 def write_dashboard(res, status, log, stats, ens, E, df, S=None, Rg=None, MKT=None, CF=None, TCH=None, SIM=None, VE=None, JD=None, DT=None, TR=None):
@@ -1621,8 +1604,8 @@ def write_dashboard(res, status, log, stats, ens, E, df, S=None, Rg=None, MKT=No
             .replace("%%NOW%%", _now_str())
             .replace("%%NEVENTS%%", n(len(E["events"][E["events"]["date"] <= price.index[-1]]), 0))
             .replace("%%NSIG%%", str(sum(1 for p in res["signals"] if p["weight"] > 0)))
-            .replace("%%DELTAS%%", delta("Dziś", d1) + delta("7 dni", d7) + delta("30 dni", d30) + delta("rok", d365))
-            .replace("%%ATH%%", f'{(res["price"]/ath-1)*100:.0f}% od rekordu {n(ath)} USD ({ath_date:%Y-%m-%d})')
+            .replace("%%DELTAS%%", delta("Today", d1) + delta("7 days", d7) + delta("30 days", d30) + delta("1 year", d365))
+            .replace("%%ATH%%", f'{(res["price"]/ath-1)*100:.0f}% from the record of {n(ath)} USD ({ath_date:%Y-%m-%d})')
             .replace("%%GAUGE%%", baro_svg(res["composite"]))
             .replace("%%ISOBARS%%", isobars_svg())
             .replace("%%PRICERAW%%", f"{res['price']:.0f}")
@@ -1652,19 +1635,19 @@ def write_dashboard(res, status, log, stats, ens, E, df, S=None, Rg=None, MKT=No
             .replace("%%BANDS%%", bands_html(ens))
             .replace("%%SIMPORT%%", trader_html(TR) + sim_html(SIM))
             .replace("%%SHORTH%%", short_html(ens) + dirtrack_html(DT) + exam_html(ens, TCH, SIM))
-            .replace("%%NSERIES%%", n(S["summary"]["n_series"], 0) if S else "kilkaset")
+            .replace("%%NSERIES%%", n(S["summary"]["n_series"], 0) if S else "several hundred")
             .replace("%%REGULARITY%%", reg_tiles)
             .replace("%%REGVERDICT%%", reg_verdict)
             .replace("%%SCANHEAD%%", scan_head)
             .replace("%%SCANBODY%%", scan_body)
             .replace("%%REGROWS%%", reg_rows)
-            .replace("%%VOLW%%", f"średnia ruchów z ostatnich tygodni {ens['vol']['weights']['ewma']*100:.0f}%, model, w którym duże wahania \"zarażają\" kolejne dni {ens['vol']['weights']['garch']*100:.0f}%, model oparty na dziennej rozpiętości cen {ens['vol']['weights']['har']*100:.0f}%"
-                     + (f"; do tego, z wagą {ens['vol']['implied_w']*100:.0f}%, wahania wyceniane na giełdzie opcji Deribit, co poprawia trafność prognozy wahań o {ens['vol']['implied_gain']*100:.1f}%".replace(".", ",")
+            .replace("%%VOLW%%", f"an average of moves over recent weeks {ens['vol']['weights']['ewma']*100:.0f}%, a model in which big swings “spill over” into the following days {ens['vol']['weights']['garch']*100:.0f}%, a model based on the daily price range {ens['vol']['weights']['har']*100:.0f}%"
+                     + (f"; on top of that, with a weight of {ens['vol']['implied_w']*100:.0f}%, the swings priced on the Deribit options exchange, which improves the accuracy of the swing forecast by {ens['vol']['implied_gain']*100:.1f}%"
                         if ens['vol'].get('implied_w') else "")
-                     + (f". Sprawdziliśmy też zmienność liczoną z danych co 5 minut (Binance, od 2017): na odłożonych danych od {ens['vol']['rv_test_from']} "
-                        + (f"poprawiła prognozę wahań o {ens['vol']['rv_gain_test']*100:.1f}%, więc jest w mieszance z wagą {ens['vol']['rv_w']*100:.0f}%".replace(".", ",")
+                     + (f". We also tested volatility calculated from 5-minute data (Binance, since 2017): on held-out data from {ens['vol']['rv_test_from']} "
+                        + (f"it improved the swing forecast by {ens['vol']['rv_gain_test']*100:.1f}%, so it is in the mix with a weight of {ens['vol']['rv_w']*100:.0f}%"
                            if ens['vol'].get('rv_w') else
-                           f"pogorszyła prognozę wahań o {abs(ens['vol'].get('rv_gain_test', 0))*100:.1f}%, więc jej nie używamy".replace(".", ","))
+                           f"it made the swing forecast worse by {abs(ens['vol'].get('rv_gain_test', 0))*100:.1f}%, so we do not use it")
                         if ens['vol'].get('rv_test_from') else ""))
             .replace("%%TRACK%%", track_html(stats, ens))
             .replace("%%CORR%%", corr_html(res["corr90"]))
@@ -1675,11 +1658,11 @@ def write_dashboard(res, status, log, stats, ens, E, df, S=None, Rg=None, MKT=No
             .replace("%%DATA%%", json.dumps(data, separators=(",", ":")))
             .replace("%%CHARTJS%%", CHARTJS))
     C.OUT_DIR.mkdir(exist_ok=True); C.DASHBOARD_HTML.parent.mkdir(exist_ok=True)
-    C.DASHBOARD_HTML.write_text(_pl_decimals(page), encoding="utf-8")
+    C.DASHBOARD_HTML.write_text(page, encoding="utf-8")
 
 
 # ----------------------------------------------------------------------------------------------
-# Szablon (CSS + HTML + JS)
+# Template (CSS + HTML + JS)
 # ----------------------------------------------------------------------------------------------
 TEMPLATE = (C.ROOT / "template_head.html").read_text(encoding="utf-8") + (C.ROOT / "template_body.html").read_text(encoding="utf-8")
 CHARTJS = (C.ROOT / "chart.js").read_text(encoding="utf-8")

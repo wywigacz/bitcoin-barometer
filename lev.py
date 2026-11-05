@@ -1,10 +1,10 @@
-"""Historia dźwigni i pozycjonowania z publicznego archiwum Binance (data.binance.vision, kontrakty USDT-M BTCUSDT, bez klucza).
+"""Leverage and positioning history from the public Binance archive (data.binance.vision, USDT-M BTCUSDT contracts, no key).
 
-  metrics (pliki dzienne od 2020-09-01, co 5 minut): otwarte pozycje (BTC), stosunek długich do krótkich u największych traderów
-     (pozycje) i u ogółu kont, stosunek wolumenu kupujących do sprzedających (taker),
-  premiumIndexKlines 1d (od 2020-01): premia kontraktu wieczystego nad ceną indeksu (baza),
-  fundingRate (od 2020-01): stawka za lewar co 8 godzin.
-Zapisujemy tylko dzienne agregaty: data/lev.csv. Dzień D jest publikowany po jego końcu, więc w testach używamy go od D+1."""
+  metrics (daily files since 2020-09-01, every 5 minutes): open interest (BTC), long-to-short ratio among the biggest traders
+     (positions) and among all accounts, ratio of buyer to seller volume (taker),
+  premiumIndexKlines 1d (since 2020-01): premium of the perpetual contract over the index price (basis),
+  fundingRate (since 2020-01): the fee for leverage every 8 hours.
+We save only daily aggregates: data/lev.csv. Day D is published after it ends, so in tests we use it from D+1."""
 import io
 import sys
 import time
@@ -81,12 +81,12 @@ def update(verbose=True):
         s = _metrics_day(d)
         if s:
             rows.append(s)
-            if len(rows) % 100 == 0:                             # zapis co 100 dni: przerwanie nie gubi pobranego
+            if len(rows) % 100 == 0:                             # save every 100 days: an interruption does not lose what was downloaded
                 part = pd.DataFrame(rows).set_index("date")
                 (part.combine_first(old) if len(old) else part).sort_index().rename_axis("date").to_csv(OUT, float_format="%.8g")
         time.sleep(0.05)
     new = pd.DataFrame(rows).set_index("date") if rows else pd.DataFrame()
-    # baza i stawka za lewar: pliki miesięczne (bieżący miesiąc jeszcze nie istnieje, więc dociągamy od 2 mies. wstecz)
+    # basis and funding rate: monthly files (the current month does not exist yet, so we fetch from 2 months back)
     have_p = set(old.index[old["premium"].notna()]) if "premium" in old else set()
     prem, fund = {}, {}
     for m in pd.date_range(P_START, yday, freq="MS"):
@@ -103,7 +103,7 @@ def update(verbose=True):
     if len(merged):
         merged.to_csv(OUT, float_format="%.8g")
     if verbose:
-        print(f"  [OK   ] Binance (dźwignia, baza, stawki): {len(new)} nowych dni pozycji, {time.time() - t0:.0f}s", flush=True)
+        print(f"  [OK   ] Binance (leverage, basis, funding): {len(new)} new days of positions, {time.time() - t0:.0f}s", flush=True)
     return merged
 
 

@@ -1,7 +1,7 @@
-"""Nagłówki prasowe z dni dużych ruchów ceny: GDELT (wiadomości o Bitcoinie) i dziennik wydarzeń światowych z Wikipedii.
+"""News headlines from days with big price moves: GDELT (Bitcoin news) and the Wikipedia log of world events.
 
-Uwaga metodologiczna: nagłówki dobieramy PO fakcie, dla dni z dużym ruchem, więc służą do opisu ("co się wtedy działo"),
-a nie do dowodzenia przyczyny ani do prognoz (byłby to błąd selekcji)."""
+A note on method: we pick the headlines AFTER the fact, for days with a big move, so they serve as a description ("what was going on then"),
+not as proof of cause or as a forecast (that would be selection bias)."""
 import json
 import re
 import time
@@ -74,7 +74,7 @@ def fetch_gdelt(day, tries=4):
                     seen.add(k)
                     out.append({"t": t[:160], "d": a.get("domain", "")})
                 return out
-            if r.status_code == 200:      # pusta odpowiedź (brak artykułów)
+            if r.status_code == 200:      # empty response (no articles)
                 return []
         except requests.RequestException:
             pass
@@ -107,7 +107,7 @@ def fetch_wiki_day(day):
 
 
 def classify(titles):
-    """Które rodzaje wydarzeń wynikają z nagłówków (liczba nagłówków pasujących do kategorii)."""
+    """Which kinds of events the headlines point to (number of headlines matching each category)."""
     hits = {k: sum(1 for t in titles if rx.search(t)) for k, rx in CATRX.items()}
     need = 2 if len(titles) >= 6 else 1
     out = sorted(((k, v) for k, v in hits.items() if v >= need), key=lambda x: -x[1])[:3]
@@ -115,7 +115,7 @@ def classify(titles):
 
 
 def big_move_days(df, thr=2.0):
-    """Pierwszy dzień każdej serii dużych ruchów (|z| >= thr) wraz z ruchem i z."""
+    """The first day of each run of big moves (|z| >= thr), together with the move and z."""
     c = df["close"]
     r = np.log(c).diff()
     sig = np.sqrt((r ** 2).ewm(alpha=C.EWMA_ALPHA, adjust=False, min_periods=30).mean())
@@ -139,7 +139,7 @@ def big_move_days(df, thr=2.0):
 
 
 def update_news(df, budget_s=600, thr=2.0, pause=7.0, verbose=True):
-    """Dociąga brakujące nagłówki (najpierw największe ruchy, potem nowsze). Zatrzymuje się po budget_s sekundach."""
+    """Fetches missing headlines (biggest moves first, then newer ones). Stops after budget_s seconds."""
     cache = load()
     moves = big_move_days(df, thr)
     todo = sorted(moves, key=lambda m: (-abs(m["z"]),))
@@ -169,7 +169,7 @@ def update_news(df, budget_s=600, thr=2.0, pause=7.0, verbose=True):
         if done % 5 == 0:
             save(cache)
             if verbose:
-                print(f"  nagłówki: {done} dni pobrano, {time.time() - t0:.0f}s", flush=True)
+                print(f"  headlines: fetched {done} days, {time.time() - t0:.0f}s", flush=True)
     save(cache)
     return cache
 

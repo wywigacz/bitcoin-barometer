@@ -1,23 +1,23 @@
-"""Wirtualny, aktywnie zarządzany portfel (edukacyjny eksperyment, bez prawdziwych pieniędzy i transakcji).
+"""A virtual, actively managed portfolio (an educational experiment, no real money and no real trades).
 
-Zasady (ustalone z góry 2026-10-29, jawne i niezmieniane po fakcie):
-  - wpłaty: 10 000 zł na start i 10 000 zł pierwszego dnia każdego miesiąca,
-  - codziennie (po zamknięciu dnia) program wybiera, jaką część portfela trzymać w BTC, a jaką w gotówce (PLN),
-  - trzy strategie proponują udział BTC:
-      regularne    - zawsze 100% (jak zwykłe regularne kupowanie),
-      ryzyko       - kontrola zmienności: min(100%, normalna zmienność / prognozowana zmienność) (Moreira i Muir 2017),
-      trend        - 100%, gdy cena wzrosła w ostatnich 28 dniach, inaczej 25% (potwierdzona hipoteza H7),
-  - uczenie się: wagi strategii według algorytmu Hedge (wagi wykładnicze): waga ~ exp(ETA × log-zysk strategii z ostatnich 365 dni),
-    najmniej 5% na strategię; uczy się tylko na przeszłości,
-  - handel tylko, gdy cel różni się od obecnego udziału o więcej niż 5 punktów procentowych; prowizja 0,2% od obrotu,
-  - kupno/sprzedaż po cenie zamknięcia dnia; decyzja używa wyłącznie danych znanych na koniec tego dnia.
-Porównanie: zwykłe regularne kupowanie (każda wpłata od razu w BTC, bez sprzedaży, ta sama prowizja).
-Podatki pominięte (w Polsce zysk z kryptowalut podlega 19% podatkowi, PIT-38).
+Rules (set in advance on 2026-10-29, public and never changed after the fact):
+  - deposits: 10,000 PLN at the start and 10,000 PLN on the first day of every month,
+  - every day (after the daily close) the program chooses what share of the portfolio to hold in BTC and what share in cash (PLN),
+  - three strategies propose a BTC share (internal key -> display name):
+      regularne -> "steady" - always 100% (like plain regular buying),
+      ryzyko    -> "risk"   - volatility control: min(100%, normal volatility / forecast volatility) (Moreira and Muir 2017),
+      trend     -> "trend"  - 100% when the price rose over the last 28 days, otherwise 25% (confirmed hypothesis H7),
+  - learning: strategy weights follow the Hedge algorithm (exponential weights): weight ~ exp(ETA x log gain of the strategy over the last 365 days),
+    at least 5% per strategy; it learns only from the past,
+  - trade only when the target differs from the current share by more than 5 percentage points; fee 0.2% of the amount traded,
+  - buy/sell at the daily closing price; the decision uses only data known at the end of that day.
+Benchmark: plain regular buying (every deposit goes straight into BTC, no selling, same fee).
+Taxes ignored here (in Poland crypto gains are taxed at 19%, PIT-38 form); see taxed() for the after-tax version.
 
-Zmiana 2026-10-30 (punkt 5 planu): zmienność dla strategii „ryzyko” to średnia wykładnicza kwadratów zwrotów (bez parametrów
-dopasowanych na całej historii), więc test na historii i egzamin nie zaglądają w przyszłość. Do tego blok odporności:
-wyniki dla każdej daty startu od 2014, porównanie ze „ślepym” portfelem o tej samej średniej ekspozycji w BTC
-(stała waga, bez żadnych sygnałów), przedział ufności z bootstrapu, kruchość okna trendu i prosta średnia strategii (1/N)."""
+Change 2026-10-30 (item 5 of the plan): volatility for the "risk" strategy is an exponential average of squared returns (no parameters
+fitted on the whole history), so the backtest and the exam do not peek into the future. Plus a robustness block:
+results for every start date since 2014, a comparison with a "blind" portfolio with the same average BTC exposure
+(fixed weight, no signals at all), a bootstrap confidence interval, fragility of the trend window and a simple average of the strategies (1/N)."""
 import json
 
 import numpy as np
@@ -33,9 +33,10 @@ WINDOW = 365
 FLOOR = 0.05
 LIVE_START = pd.Timestamp("2026-10-28")
 BACKTEST_START = pd.Timestamp("2018-01-01")
-EXAM_START = pd.Timestamp("2024-10-29")              # egzamin na ostatnich 2 latach
+EXAM_START = pd.Timestamp("2024-10-29")              # exam on the last 2 years
 LIVE_LOG = C.DATA_DIR / "sim_live.csv"
-STRATS = ("regularne", "ryzyko", "trend")
+STRATS = ("regularne", "ryzyko", "trend")           # internal keys (stored in CSV columns t_*/p_*), do not rename
+NAMES = {"regularne": "steady", "ryzyko": "risk", "trend": "trend"}   # display names used in the journal text
 
 
 def inputs(df, sig):
@@ -43,7 +44,7 @@ def inputs(df, sig):
     w = pd.read_csv(world.WORLD_CSV, index_col=0, parse_dates=True)["y_pln"]
     pln = w.reindex(df.index.union(w.index)).sort_index().ffill(limit=7).reindex(df.index)
     X = pd.DataFrame(index=df.index)
-    X["px"] = df["close"] * pln                                  # cena BTC w złotych
+    X["px"] = df["close"] * pln                                  # BTC price in PLN
     X["usd"] = df["close"]
     X["pln"] = pln
     X["sig"] = sig
@@ -55,7 +56,7 @@ def inputs(df, sig):
     T["regularne"] = 1.0
     T["ryzyko"] = (X["sig_norm"] / X["sig"]).clip(upper=1.0).fillna(1.0)
     T["trend"] = np.where(X["mom28"] > 0, 1.0, 0.25)
-    # wyniki strategii: dzienny zwrot = udział BTC z wczoraj × zwrot BTC dziś (to, co każda zarobiłaby osobno)
+    # strategy results: daily return = yesterday's BTC share x today's BTC return (what each would have earned on its own)
     G = np.log1p(T.shift(1).fillna(1.0).mul(r, axis=0))
     S = G.rolling(WINDOW, min_periods=60).sum().fillna(0)
     E = np.exp(ETA * (S - S.max(axis=1).to_numpy()[:, None]))
@@ -68,21 +69,21 @@ def inputs(df, sig):
 def _why(d, x, t, p, w_now, target, action, amt_pln):
     pc = lambda v: f"{v * 100:.0f}%"
     s_y, n_y = x["sig"] * np.sqrt(365) * 100, x["sig_norm"] * np.sqrt(365) * 100
-    risk = (f"prognozowane wahania {s_y:.0f}% rocznie wobec normy {n_y:.0f}%, więc „ryzyko” chce {pc(t['ryzyko'])} w BTC"
-            if np.isfinite(n_y) else f"„ryzyko” chce {pc(t['ryzyko'])} w BTC")
-    trend = f"cena w 28 dni {x['mom28'] * 100:+.1f}%, więc „trend” chce {pc(t['trend'])}".replace(".", ",")
+    risk = (f"expected swings of {s_y:.0f}% a year against a normal {n_y:.0f}%, so “risk” wants {pc(t['ryzyko'])} in BTC"
+            if np.isfinite(n_y) else f"“risk” wants {pc(t['ryzyko'])} in BTC")
+    trend = f"the price moved {x['mom28'] * 100:+.1f}% in 28 days, so “trend” wants {pc(t['trend'])}"
     best = max(STRATS, key=lambda k: p[k])
-    learn = (f"wagi wyuczone na ostatnim roku: regularne {pc(p['regularne'])}, ryzyko {pc(p['ryzyko'])}, trend {pc(p['trend'])} "
-             f"(najlepiej radzi sobie „{best}”)")
-    head = f"Cel {pc(target)} w BTC, było {pc(w_now)}. "
-    kw = f"{amt_pln:,.0f}".replace(",", " ")
-    act = {"KUP": f"Kupuję BTC za {kw} zł.", "SPRZEDAJ": f"Sprzedaję BTC za {kw} zł.",
-           "TRZYMAJ": f"Różnica mniejsza niż {BAND * 100:.0f} pkt proc., więc nic nie robię (oszczędzam prowizję)."}[action]
-    return head + act + " Dlaczego: " + risk + "; " + trend + "; " + learn + "."
+    learn = (f"weights learned over the last year: steady {pc(p['regularne'])}, risk {pc(p['ryzyko'])}, trend {pc(p['trend'])} "
+             f"(“{NAMES[best]}” is doing best)")
+    head = f"Target {pc(target)} in BTC, was {pc(w_now)}. "
+    kw = f"{amt_pln:,.0f}"
+    act = {"KUP": f"I buy BTC for {kw} PLN.", "SPRZEDAJ": f"I sell BTC for {kw} PLN.",
+           "TRZYMAJ": f"The gap is under {BAND * 100:.0f} percentage points, so I do nothing (and save the fee)."}[action]
+    return head + act + " Why: " + risk + "; " + trend + "; " + learn + "."
 
 
 def simulate(X, T, P, start, end=None, log=True, state=None):
-    """Silnik: dzień po dniu, od start do end. state pozwala kontynuować zapisany portfel."""
+    """Engine: day by day, from start to end. state lets us continue a saved portfolio."""
     D = X.loc[start:end] if end is not None else X.loc[start:]
     cash, btc, dep = (state or {}).get("cash", 0.0), (state or {}).get("btc", 0.0), (state or {}).get("deposited", 0.0)
     last_month = (state or {}).get("last_month")
@@ -133,7 +134,7 @@ TAX = 0.19
 
 
 def nbp_rate():
-    """Stopa referencyjna NBP (dziennie, % rocznie) z BIS (bez klucza); zapis w data/nbp_rate.csv."""
+    """NBP (Polish central bank) reference rate (daily, % a year) from the BIS (no key); saved to data/nbp_rate.csv."""
     import io
     import requests
     try:
@@ -147,11 +148,11 @@ def nbp_rate():
 
 
 def taxed(X, start, target, rate):
-    """Portfel aktywny i regularne kupowanie z polskim podatkiem i odsetkami (wersja uproszczona, punkt 13 planu):
-    - 19% od rocznego dochodu z walut wirtualnych: przychód ze sprzedaży minus koszty zakupów (kasowo), nadwyżka kosztów
-      przechodzi na kolejne lata (art. 30b ust. 1a ustawy o PIT); podatek płatny 30 kwietnia następnego roku,
-    - gotówka na lokacie: stopa referencyjna NBP minus 1 pkt proc. (nie mniej niż 0), odsetki pomniejszone o 19% podatku Belki,
-    - na koniec oba portfele są sprzedawane i opodatkowane (regularne kupowanie płaci cały podatek dopiero wtedy)."""
+    """The active portfolio and regular buying with Polish tax and interest (simplified version, item 13 of the plan):
+    - 19% of the yearly income from virtual currencies: sale proceeds minus purchase costs (cash basis), excess costs
+      carry over to later years (Art. 30b(1a) of the Polish PIT Act); the tax is paid on April 30 of the following year,
+    - cash in a deposit account: the NBP reference rate minus 1 percentage point (not below 0), interest reduced by the 19% "Belka" tax,
+    - at the end both portfolios are sold and taxed (regular buying pays all of its tax only then)."""
     D = X.loc[start:]
     rt = (rate.reindex(D.index.union(rate.index)).sort_index().ffill().reindex(D.index).fillna(0) if rate is not None
           else pd.Series(0.0, D.index))
@@ -184,7 +185,7 @@ def taxed(X, start, target, rate):
             t = settle(y_prev)
             paid_for.add(y_prev)
             if t > 0:
-                if cash < t:                                   # brakuje gotówki: sprzedaż BTC na podatek
+                if cash < t:                                   # not enough cash: sell BTC to pay the tax
                     q = min(btc, (t - cash) / (px * (1 - FEE)))
                     btc -= q
                     cash += q * px * (1 - FEE)
@@ -209,20 +210,20 @@ def taxed(X, start, target, rate):
     pre = cash + btc * px
     rev[D.index[-1].year] = rev.get(D.index[-1].year, 0.0) + btc * px * (1 - FEE)
     cash += btc * px * (1 - FEE)
-    for y in sorted(set(rev) | set(cost)):                    # rozliczenie lat jeszcze niezapłaconych (likwidacja na koniec)
+    for y in sorted(set(rev) | set(cost)):                    # settle the years not yet paid (liquidation at the end)
         if y not in paid_for:
             t = settle(y)
             cash -= t
             taxes += t
     dca_pre = dbtc * px
     dca_rev = dbtc * px * (1 - FEE)
-    dca_tax = TAX * max(dca_rev - dep, 0.0)                  # koszty = wszystkie wpłaty, przychód dopiero na koniec
+    dca_tax = TAX * max(dca_rev - dep, 0.0)                  # costs = all deposits, proceeds only at the end
     return {"deposited": dep, "active_pre": pre, "active_after": cash, "active_tax": taxes,
             "dca_pre": dca_pre, "dca_after": dca_rev - dca_tax, "dca_tax": dca_tax}
 
 
 def _twr(v, dep):
-    """Zwrot ważony czasem (bez wpływu wpłat): dzienny zwrot = (wartość dziś − wpłata dziś) / wartość wczoraj."""
+    """Time-weighted return (no effect from deposits): daily return = (value today - deposit today) / value yesterday."""
     g = np.ones(len(v))
     g[1:] = (v[1:] - dep[1:]) / v[:-1]
     return np.cumprod(g)
@@ -238,7 +239,7 @@ def _stats(R, col="value"):
 
 
 def causal_sigma(df):
-    """Zmienność dzienna liczona tylko z przeszłości: średnia wykładnicza kwadratów zwrotów (stała alfa z config)."""
+    """Daily volatility computed only from the past: exponential average of squared returns (fixed alpha from config)."""
     r = np.log(df["close"]).diff().fillna(0) ** 2
     return np.sqrt(r.ewm(alpha=C.EWMA_ALPHA, adjust=False, min_periods=30).mean()).bfill().to_numpy()
 
@@ -250,7 +251,7 @@ def _with_target(X, target):
 
 
 def _boot_ci(d, block=20, reps=2000, seed=11):
-    """Przedział 90% średniej (stacjonarny bootstrap Politisa i Romano, średni blok 20 dni)."""
+    """90% interval for the mean (Politis and Romano stationary bootstrap, average block of 20 days)."""
     rng = np.random.default_rng(seed)
     n = len(d)
     if n < 60:
@@ -269,7 +270,7 @@ def _boot_ci(d, block=20, reps=2000, seed=11):
 
 
 def robustness(X, T, P, df):
-    """Czy przewaga to umiejętność, czy szczęście daty startu i mniejszej ekspozycji?"""
+    """Is the edge skill, or just luck with the start date and lower exposure?"""
     out = {}
     eqw = T[list(STRATS)].mean(axis=1)
     for years in (2, 4):
@@ -279,7 +280,7 @@ def robustness(X, T, P, df):
             A = simulate(X, T, P, st, en, log=False)
             if len(A) < 300:
                 continue
-            w = float((A["btc"] * A["price_pln"] / A["value"]).mean())   # średnia ekspozycja aktywnego portfela
+            w = float((A["btc"] * A["price_pln"] / A["value"]).mean())   # average exposure of the active portfolio
             B = simulate(_with_target(X, w), T, P, st, en, log=False)
             N = simulate(_with_target(X, eqw), T, P, st, en, log=False)
             rows.append({"start": str(st.date()), "vs_dca": float(A["value"].iloc[-1] / A["dca_value"].iloc[-1]),
@@ -295,7 +296,7 @@ def robustness(X, T, P, df):
                             "beat_dca_1n": float((R["n_vs_dca"] > 1).mean()),
                             "dd_vs_dca_pp": float((R["dd_a"] - R["dd_dca"]).median() * 100),
                             "dd_vs_blind_pp": float((R["dd_a"] - R["dd_blind"]).median() * 100), "avg_w": float(R["w"].mean())}
-    # przedział ufności dla przewagi na egzaminie (dzienne zwroty bez wpływu wpłat)
+    # confidence interval for the edge on the exam (daily returns without the effect of deposits)
     E = simulate(X, T, P, EXAM_START, log=False)
     v, dep = E["value"].to_numpy(float), E["deposit"].to_numpy(float)
     vd = E["dca_value"].to_numpy(float)
@@ -303,7 +304,7 @@ def robustness(X, T, P, df):
     gd = np.log((vd[1:] - dep[1:] * (1 - FEE)) / vd[:-1])
     ci = _boot_ci(ga - gd)
     out["exam_ci"] = {"mean_ann": float((ga - gd).mean() * 365), "lo_ann": ci[0] * 365, "hi_ann": ci[1] * 365} if ci else None
-    # kruchość: sama reguła trendu z różnymi oknami
+    # fragility: the trend rule alone with different windows
     lc = np.log(df["close"])
     frag = []
     for L in (14, 28, 56, 84, 112, 200):
@@ -312,7 +313,7 @@ def robustness(X, T, P, df):
         B = simulate(_with_target(X, tgt), T, P, EXAM_START, log=False)
         frag.append({"L": L, "since2018": float(A["value"].iloc[-1] / A["dca_value"].iloc[-1]), "exam": float(B["value"].iloc[-1] / B["dca_value"].iloc[-1])})
     out["fragility"] = frag
-    # 1/N (równe wagi strategii) obok Hedge
+    # 1/N (equal strategy weights) next to Hedge
     for nm, tgt in (("hedge", X["target"]), ("1n", eqw)):
         A = simulate(_with_target(X, tgt), T, P, BACKTEST_START, log=False)
         B = simulate(_with_target(X, tgt), T, P, EXAM_START, log=False)
@@ -321,11 +322,11 @@ def robustness(X, T, P, df):
 
 
 def run(df, sig):
-    sig = causal_sigma(df)                                       # od 2026-10-30: bez zaglądania w przyszłość (patrz opis modułu)
+    sig = causal_sigma(df)                                       # since 2026-10-30: no peeking into the future (see the module description)
     X, T, P, S = inputs(df, sig)
-    done = X.index[X.index < pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()]   # tylko zamknięte dni
+    done = X.index[X.index < pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()]   # closed days only
     X, T, P = X.loc[done], T.loc[done], P.loc[done]
-    # test na historii (liczony od nowa przy każdej aktualizacji, z tymi samymi zasadami)
+    # backtest (recomputed from scratch at every update, with the same rules)
     B = simulate(X, T, P, BACKTEST_START, log=False)
     bt = {"active": _stats(B), "dca": _stats(B, "dca_value"),
           "trades": int((B["action"] != "TRZYMAJ").sum()), "fees_est": float(B["amount_pln"].sum() * FEE),
@@ -334,17 +335,17 @@ def run(df, sig):
                     "a": B["value"].iloc[::14].round(0).tolist() + [float(B["value"].iloc[-1])],
                     "b": B["dca_value"].iloc[::14].round(0).tolist() + [float(B["dca_value"].iloc[-1])],
                     "dep": B["deposited"].iloc[::14].tolist() + [float(B["deposited"].iloc[-1])]}}
-    # egzamin: start z pierwszą wpłatą dokładnie 2 lata temu, te same zasady
+    # exam: start with the first deposit exactly 2 years ago, same rules
     Ex = simulate(X, T, P, EXAM_START, log=False)
     bt["exam"] = {"start": str(EXAM_START.date()), "active": _stats(Ex), "dca": _stats(Ex, "dca_value"),
                   "trades": int((Ex["action"] != "TRZYMAJ").sum())}
     bt["robust"] = robustness(X, T, P, df)
-    try:                                                         # punkt 13: po podatku i z odsetkami od gotówki
+    try:                                                         # item 13: after tax and with interest on cash
         rate = nbp_rate()
         bt["tax"] = {"since2018": taxed(X, BACKTEST_START, X["target"], rate), "exam": taxed(X, EXAM_START, X["target"], rate)}
     except Exception as e:
-        print("  [uwaga] podatek w portfelu:", str(e)[:120])
-    # portfel na żywo: dziennik tylko dopisywany (przeszłych decyzji nigdy nie przeliczamy)
+        print("  [warning] portfolio tax:", str(e)[:120])
+    # live portfolio: append-only log (we never recompute past decisions)
     old = pd.read_csv(LIVE_LOG) if LIVE_LOG.exists() else pd.DataFrame()
     if len(old):
         last = old.iloc[-1]

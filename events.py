@@ -1,5 +1,5 @@
-"""Baza wydarzeń: ręczne + kalendarz (FOMC, opcje, rynek pracy) + automatycznie wykrywane szoki rynkowe.
-Do tego atrybucja dużych ruchów BTC do wydarzeń i event study (typowa reakcja wg kategorii)."""
+"""Event database: hand-written + calendar (FOMC, options, jobs report) + automatically detected market shocks.
+Plus attribution of big BTC moves to events and an event study (typical reaction by category)."""
 import re
 from datetime import date, timedelta
 
@@ -13,10 +13,10 @@ import events_data as E
 FOMC_CSV = C.DATA_DIR / "fomc.csv"
 MONTHS = {m: i + 1 for i, m in enumerate(["January", "February", "March", "April", "May", "June", "July",
                                            "August", "September", "October", "November", "December"])}
-WINDOWS = {1: "dzień", 3: "3 dni", 7: "7 dni", 14: "14 dni", 30: "30 dni"}
+WINDOWS = {1: "1 day", 3: "3 days", 7: "7 days", 14: "14 days", 30: "30 days"}
 
 
-# ---------------------------------------------------------------- kalendarz
+# ---------------------------------------------------------------- calendar
 def _mon(s):
     s = s.strip()
     for name, n in MONTHS.items():
@@ -56,7 +56,7 @@ def _fetch_fomc(year_hist=None):
 
 
 def fomc_dates():
-    """Dni decyzji FOMC (cache w data/fomc.csv). Awaria scrapowania nie zatrzymuje systemu."""
+    """FOMC decision days (cached in data/fomc.csv). A scraping failure does not stop the system."""
     have = set()
     if FOMC_CSV.exists():
         have = set(pd.to_datetime(pd.read_csv(FOMC_CSV)["date"]).dt.date)
@@ -67,7 +67,7 @@ def fomc_dates():
             if y not in years:
                 have |= set(_fetch_fomc(y))
     except Exception as e:
-        print("  [uwaga] FOMC:", str(e)[:100])
+        print("  [warning] FOMC:", str(e)[:100])
     if have:
         pd.DataFrame({"date": sorted(have)}).to_csv(FOMC_CSV, index=False)
     return sorted(have)
@@ -90,20 +90,20 @@ def _first_friday(y, m):
 def calendar_events(last_day):
     rows = []
     for d in fomc_dates():
-        rows.append((pd.Timestamp(d), "fomc", "Decyzja FOMC", 0, 2, "calendar"))
+        rows.append((pd.Timestamp(d), "fomc", "FOMC decision", 0, 2, "calendar"))
     for y in range(2016, last_day.year + 2):
         for m in (3, 6, 9, 12):
-            rows.append((pd.Timestamp(_last_friday(y, m)), "opex", "Kwartalne wygasanie opcji i futures", 0, 1, "calendar"))
+            rows.append((pd.Timestamp(_last_friday(y, m)), "opex", "Quarterly options and futures expiry", 0, 1, "calendar"))
     for y in range(2012, last_day.year + 2):
         for m in range(1, 13):
-            rows.append((pd.Timestamp(_first_friday(y, m)), "nfp", "Raport z rynku pracy USA (pierwszy piątek)", 0, 1, "calendar"))
+            rows.append((pd.Timestamp(_first_friday(y, m)), "nfp", "US jobs report (first Friday)", 0, 1, "calendar"))
     for y in (2012, 2014, 2018, 2022):
         rows.append((pd.Timestamp({2012: "2012-11-06", 2014: "2014-11-04", 2018: "2018-11-06", 2022: "2022-11-08"}[y]),
-                     "politics", "Wybory w USA" + (" (prezydenckie)" if y == 2012 else " (połówkowe)"), 0, 1, "calendar"))
+                     "politics", "US elections" + (" (presidential)" if y == 2012 else " (midterm)"), 0, 1, "calendar"))
     return rows
 
 
-# ---------------------------------------------------------------- auto-wykrywanie szoków
+# ---------------------------------------------------------------- automatic shock detection
 def _declutter(mask, gap):
     out, last = [], None
     for d in mask.index[mask.fillna(False).to_numpy(bool)]:
@@ -125,37 +125,37 @@ def detect_shocks(df):
 
     vix = col("vix")
     if vix is not None:
-        add((vix >= 30) & (vix.shift(1).rolling(20).max() < 30), "auto_vix", "VIX przekracza 30", 20)
-        add((vix / vix.shift(1) - 1) >= 0.35, "auto_vix", "Skok VIX o ponad 35% w dzień", 10)
+        add((vix >= 30) & (vix.shift(1).rolling(20).max() < 30), "auto_vix", "VIX goes above 30", 20)
+        add((vix / vix.shift(1) - 1) >= 0.35, "auto_vix", "VIX jumps more than 35% in a day", 10)
     spx = col("spx")
     if spx is not None:
         d1, d5 = spx / spx.shift(1) - 1, spx / spx.shift(5) - 1
-        add((d1 <= -0.03) | (d5 <= -0.07), "auto_eq_dn", "Gwałtowny spadek S&P 500", 10)
-        add((d1 >= 0.04) | (d5 >= 0.07), "auto_eq_up", "Gwałtowny wzrost S&P 500", 10)
+        add((d1 <= -0.03) | (d5 <= -0.07), "auto_eq_dn", "Sharp fall in the S&P 500", 10)
+        add((d1 >= 0.04) | (d5 >= 0.07), "auto_eq_up", "Sharp rise in the S&P 500", 10)
     dxy = col("dxy")
     if dxy is not None:
         d5 = dxy / dxy.shift(5) - 1
-        add(d5 >= 0.022, "auto_usd_up", "Gwałtowne umocnienie dolara", 10)
-        add(d5 <= -0.022, "auto_usd_dn", "Gwałtowne osłabienie dolara", 10)
+        add(d5 >= 0.022, "auto_usd_up", "Sharp strengthening of the dollar", 10)
+        add(d5 <= -0.022, "auto_usd_dn", "Sharp weakening of the dollar", 10)
     tnx = col("tnx")
     if tnx is not None:
         d5 = tnx / tnx.shift(5) - 1
-        add(d5 >= 0.08, "auto_yld_up", "Skok rentowności 10-latek", 10)
-        add(d5 <= -0.08, "auto_yld_dn", "Spadek rentowności 10-latek", 10)
+        add(d5 >= 0.08, "auto_yld_up", "10-year yield jumps", 10)
+        add(d5 <= -0.08, "auto_yld_dn", "10-year yield falls", 10)
     oil = col("oil")
     if oil is not None:
         d5 = oil / oil.shift(5) - 1
-        add(d5 >= 0.12, "auto_oil_up", "Skok cen ropy", 10)
-        add(d5 <= -0.12, "auto_oil_dn", "Spadek cen ropy", 10)
+        add(d5 >= 0.12, "auto_oil_up", "Oil price jumps", 10)
+        add(d5 <= -0.12, "auto_oil_dn", "Oil price falls", 10)
     gold = col("gold")
     if gold is not None:
-        add((gold / gold.shift(5) - 1) >= 0.05, "auto_gold_up", "Skok cen złota", 10)
+        add((gold / gold.shift(5) - 1) >= 0.05, "auto_gold_up", "Gold price jumps", 10)
     hyg = col("hyg")
     if hyg is not None:
-        add((hyg / hyg.shift(5) - 1) <= -0.025, "auto_credit", "Stres na rynku obligacji korporacyjnych", 10)
+        add((hyg / hyg.shift(5) - 1) <= -0.025, "auto_credit", "Stress in the corporate bond market", 10)
     jpy = col("usdjpy")
     if jpy is not None:
-        add((jpy / jpy.shift(5) - 1) <= -0.03, "auto_yen", "Gwałtowne umocnienie jena", 10)
+        add((jpy / jpy.shift(5) - 1) <= -0.03, "auto_yen", "Sharp strengthening of the yen", 10)
     return ev
 
 
@@ -163,23 +163,23 @@ HACKS_CSV = C.DATA_DIR / "hacks.csv"
 
 
 def hack_events(min_usd=1e8):
-    """Duże włamania i kradzieże (DefiLlama /hacks, keyless) jako zdarzenia kategorii 'hack'."""
+    """Large hacks and thefts (DefiLlama /hacks, keyless) as events in the 'hack' category."""
     try:
         h = requests.get("https://api.llama.fi/hacks", headers={"User-Agent": "btc-predictor"}, timeout=40).json()
         df = pd.DataFrame([{"date": pd.Timestamp(int(x["date"]), unit="s").normalize(), "name": x["name"], "usd": x.get("amount") or 0}
                            for x in h if x.get("date")])
         df.to_csv(HACKS_CSV, index=False)
     except Exception as e:
-        print("  [uwaga] hacks:", str(e)[:100])
+        print("  [warning] hacks:", str(e)[:100])
         if not HACKS_CSV.exists():
             return []
         df = pd.read_csv(HACKS_CSV, parse_dates=["date"])
     df = df[df["usd"] >= min_usd]
-    return [(r.date, "hack", f"Włamanie: {r.name} (~{r.usd/1e6:,.0f} mln USD)", -1, 2 if r.usd >= 3e8 else 1, "auto")
+    return [(r.date, "hack", f"Hack: {r.name} (~{r.usd/1e6:,.0f} million USD)", -1, 2 if r.usd >= 3e8 else 1, "auto")
             for r in df.itertuples()]
 
 
-# ---------------------------------------------------------------- budowa bazy
+# ---------------------------------------------------------------- building the database
 def build_events(df):
     rows = []
     for d, cat, title, sign, imp in E.CURATED:
@@ -199,7 +199,7 @@ def _sigma(c):
 
 
 def study(df, ev):
-    """Event study: zwrot BTC po wydarzeniu, standaryzowany zmiennością sprzed zdarzenia."""
+    """Event study: BTC return after an event, standardized by the volatility before the event."""
     c, sig = df["close"], _sigma(df["close"])
     pos_idx = df.index.get_indexer(ev["date"], method="bfill")
     ev = ev.copy()
@@ -275,7 +275,7 @@ def attribute_moves(df, ev, cat_tab, thr=2.0, limit=60):
         cand = candidates(d0)
         moves.append({"date": d0.strftime("%Y-%m-%d"), "ret": float(ret), "z": float(z.loc[cl].sum() / np.sqrt(len(cl))),
                       "causes": [{"cat": e.cat, "title": e.title, "kind": e.kind, "date": e.date.strftime("%Y-%m-%d")} for _, e in cand[:3]]})
-    # placebo: jaki odsetek losowych dni ma jakiegokolwiek kandydata (miara napompowania "wyjaśnień")
+    # placebo: what share of random days has any candidate at all (a measure of how inflated the "explanations" are)
     rng = np.random.default_rng(7)
     pool = z.index[z.index > "2013-01-01"]
     pick = rng.choice(len(pool), size=min(400, len(pool)), replace=False)

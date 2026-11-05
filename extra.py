@@ -1,5 +1,5 @@
-"""Dodatkowe sygnały: płynność dolara, pozycje dużych graczy (CFTC), ekosystem krypto, uwaga techów (Hacker News),
-pogoda kosmiczna. Każde źródło jest niezależne: awaria jednego nie zatrzymuje reszty. Wynik: data/extra.csv (dzienny)."""
+"""Extra signals: dollar liquidity, big players' positions (CFTC), the crypto ecosystem, tech attention (Hacker News),
+space weather. Each source is independent: if one fails, the rest keep going. Output: data/extra.csv (daily)."""
 import io
 import json
 import time
@@ -14,36 +14,36 @@ OUT = C.DATA_DIR / "extra.csv"
 HN_CACHE = C.DATA_DIR / "hn_cache.json"
 UA = {"User-Agent": "btc-predictor/1.0 (research; wywigacz@users.noreply.github.com)"}
 
-# nazwa -> (etykieta, rodzaj transformacji: attn = log-poziom uwagi/wielkości, lvl = poziom/stopa, chg = zmiany procentowe salda)
+# name -> (label, kind of transform: attn = log level of attention/size, lvl = level/rate, chg = percentage changes of a balance)
 KIND = {
-    "x_rrp": ("Płynność: gotówka banków parkowana w Fedzie (reverse repo)", "chg"),
-    "x_tga": ("Płynność: saldo konta rządu USA w Fedzie (TGA)", "chg"),
-    "x_soma": ("Płynność: portfel obligacji Fedu (SOMA)", "chg"),
-    "x_netliq": ("Płynność netto dolara (Fed − konto rządu − reverse repo)", "chg"),
-    "x_sofr": ("Stopa overnight SOFR", "lvl"), "x_effr": ("Stopa overnight EFFR", "lvl"), "x_sofr_effr": ("Napięcie na rynku pieniężnym (SOFR minus EFFR)", "lvl"),
-    "x_tvl": ("Krypto: wartość zablokowana w DeFi", "attn"), "x_dex": ("Krypto: obroty giełd zdecentralizowanych", "attn"),
-    "x_usdt": ("Krypto: podaż USDT (Tether)", "chg"), "x_usdc": ("Krypto: podaż USDC", "chg"),
-    "x_ln_cap": ("Sieć Lightning: pojemność kanałów", "chg"), "x_ln_nodes": ("Sieć Lightning: liczba węzłów", "attn"),
-    "x_txcnt": ("Sieć BTC: liczba transakcji (CoinMetrics)", "attn"), "x_iss": ("Sieć BTC: wartość nowo wykopanych monet", "attn"),
-    "x_exsupply": ("Sieć BTC: bitcoiny leżące na giełdach", "chg"), "x_exflow": ("Sieć BTC: napływ BTC na giełdy (USD)", "attn"),
-    "x_exin_btc": ("Sieć BTC: napływ BTC na giełdy (BTC)", "attn"), "x_exout_btc": ("Sieć BTC: odpływ BTC z giełd (BTC)", "attn"),
-    "x_gdelt_tone": ("Ton newsów o bitcoinie (GDELT)", "lvl"),
-    "x_kp": ("Kosmos: burze geomagnetyczne (indeks Kp)", "lvl"), "x_ap": ("Kosmos: aktywność geomagnetyczna (Ap)", "lvl"),
-    "x_f107": ("Kosmos: strumień radiowy Słońca (F10.7)", "lvl"),
+    "x_rrp": ("Liquidity: bank cash parked at the Fed (reverse repo)", "chg"),
+    "x_tga": ("Liquidity: US government account balance at the Fed (TGA)", "chg"),
+    "x_soma": ("Liquidity: the Fed's bond portfolio (SOMA)", "chg"),
+    "x_netliq": ("Net dollar liquidity (Fed - government account - reverse repo)", "chg"),
+    "x_sofr": ("SOFR overnight rate", "lvl"), "x_effr": ("EFFR overnight rate", "lvl"), "x_sofr_effr": ("Money market stress (SOFR minus EFFR)", "lvl"),
+    "x_tvl": ("Crypto: total value locked in DeFi", "attn"), "x_dex": ("Crypto: decentralized exchange volume", "attn"),
+    "x_usdt": ("Crypto: USDT (Tether) supply", "chg"), "x_usdc": ("Crypto: USDC supply", "chg"),
+    "x_ln_cap": ("Lightning Network: channel capacity", "chg"), "x_ln_nodes": ("Lightning Network: number of nodes", "attn"),
+    "x_txcnt": ("BTC network: number of transactions (CoinMetrics)", "attn"), "x_iss": ("BTC network: value of newly mined coins", "attn"),
+    "x_exsupply": ("BTC network: bitcoins held on exchanges", "chg"), "x_exflow": ("BTC network: BTC flowing into exchanges (USD)", "attn"),
+    "x_exin_btc": ("BTC network: BTC flowing into exchanges (BTC)", "attn"), "x_exout_btc": ("BTC network: BTC flowing out of exchanges (BTC)", "attn"),
+    "x_gdelt_tone": ("Tone of bitcoin news (GDELT)", "lvl"),
+    "x_kp": ("Space: geomagnetic storms (Kp index)", "lvl"), "x_ap": ("Space: geomagnetic activity (Ap)", "lvl"),
+    "x_f107": ("Space: solar radio flux (F10.7)", "lvl"),
 }
-CFTC = {  # nazwa -> (zbiór, kod kontraktu CFTC (stały mimo zmian nazw), kolumna long, kolumna short, etykieta)
-    "x_cot_es": ("gpe5-46if", "13874A", "lev_money_positions_long", "lev_money_positions_short", "Fundusze lewarowane: S&P 500"),
-    "x_cot_nq": ("gpe5-46if", "209742", "lev_money_positions_long", "lev_money_positions_short", "Fundusze lewarowane: Nasdaq"),
-    "x_cot_ty": ("gpe5-46if", "043602", "lev_money_positions_long", "lev_money_positions_short", "Fundusze lewarowane: obligacje 10-letnie"),
-    "x_cot_jy": ("gpe5-46if", "097741", "lev_money_positions_long", "lev_money_positions_short", "Fundusze lewarowane: jen"),
-    "x_cot_ec": ("gpe5-46if", "099741", "lev_money_positions_long", "lev_money_positions_short", "Fundusze lewarowane: euro"),
-    "x_cot_vx": ("gpe5-46if", "1170E1", "lev_money_positions_long", "lev_money_positions_short", "Fundusze lewarowane: VIX"),
-    "x_cot_gc": ("72hh-3qpy", "088691", "m_money_positions_long_all", "m_money_positions_short_all", "Fundusze: złoto"),
-    "x_cot_cl": ("72hh-3qpy", "067651", "m_money_positions_long_all", "m_money_positions_short_all", "Fundusze: ropa"),
+CFTC = {  # name -> (dataset, CFTC contract code (fixed despite name changes), long column, short column, label)
+    "x_cot_es": ("gpe5-46if", "13874A", "lev_money_positions_long", "lev_money_positions_short", "Leveraged funds: S&P 500"),
+    "x_cot_nq": ("gpe5-46if", "209742", "lev_money_positions_long", "lev_money_positions_short", "Leveraged funds: Nasdaq"),
+    "x_cot_ty": ("gpe5-46if", "043602", "lev_money_positions_long", "lev_money_positions_short", "Leveraged funds: 10-year bonds"),
+    "x_cot_jy": ("gpe5-46if", "097741", "lev_money_positions_long", "lev_money_positions_short", "Leveraged funds: yen"),
+    "x_cot_ec": ("gpe5-46if", "099741", "lev_money_positions_long", "lev_money_positions_short", "Leveraged funds: euro"),
+    "x_cot_vx": ("gpe5-46if", "1170E1", "lev_money_positions_long", "lev_money_positions_short", "Leveraged funds: VIX"),
+    "x_cot_gc": ("72hh-3qpy", "088691", "m_money_positions_long_all", "m_money_positions_short_all", "Funds: gold"),
+    "x_cot_cl": ("72hh-3qpy", "067651", "m_money_positions_long_all", "m_money_positions_short_all", "Funds: oil"),
 }
-KIND.update({k: (v[4] + " (pozycja netto / rynek)", "lvl") for k, v in CFTC.items()})
+KIND.update({k: (v[4] + " (net position / market)", "lvl") for k, v in CFTC.items()})
 HN_TERMS = {"x_hn_bitcoin": "bitcoin", "x_hn_crypto": "crypto", "x_hn_ai": "AI", "x_hn_recession": "recession", "x_hn_layoffs": "layoffs", "x_hn_inflation": "inflation"}
-KIND.update({k: (f"Hacker News: wzmianki „{v}”", "attn") for k, v in HN_TERMS.items()})
+KIND.update({k: (f'Hacker News: mentions of "{v}"', "attn") for k, v in HN_TERMS.items()})
 
 
 def _get(url, timeout=60, **kw):
@@ -55,7 +55,7 @@ def _get(url, timeout=60, **kw):
         except requests.RequestException:
             pass
         time.sleep(2 * (i + 1))
-    raise RuntimeError(f"brak odpowiedzi: {url[:90]}")
+    raise RuntimeError(f"no response: {url[:90]}")
 
 
 def _ser(d):
@@ -157,7 +157,7 @@ def cftc():
                     pass
             if d:
                 s = _ser(d)
-                s.index = s.index + pd.Timedelta(days=3)       # stan z wtorku CFTC publikuje w piątek
+                s.index = s.index + pd.Timedelta(days=3)       # CFTC publishes the Tuesday snapshot on Friday
                 out[name] = s
         except Exception:
             continue
@@ -177,7 +177,7 @@ def space():
 
 
 def hackernews():
-    """Miesięczna liczba artykułów na Hacker News z danym słowem (pamięć podręczna; dociągane tylko brakujące miesiące)."""
+    """Monthly number of Hacker News stories with a given word (cached; only missing months are fetched)."""
     cache = json.loads(HN_CACHE.read_text(encoding="utf-8")) if HN_CACHE.exists() else {}
     months = pd.date_range("2011-08-01", pd.Timestamp.now(), freq="MS")
     out = {}
@@ -196,7 +196,7 @@ def hackernews():
             except Exception:
                 continue
             time.sleep(0.15)
-        # wynik miesiąca jest znany dopiero po jego końcu, więc przypisujemy go od 1. dnia NASTĘPNEGO miesiąca (bez podglądania przyszłości)
+        # a month's count is known only after it ends, so we assign it from day 1 of the NEXT month (no peeking into the future)
         now = pd.Timestamp.now().normalize()
         done = {k: v for k, v in c.items() if pd.Timestamp(k + "-01") + pd.offsets.MonthBegin(1) <= now}
         s = pd.Series({pd.Timestamp(k + "-01") + pd.offsets.MonthBegin(1): v / pd.Timestamp(k + "-01").days_in_month for k, v in done.items()}).sort_index()
@@ -209,25 +209,25 @@ GDELT_CACHE = C.DATA_DIR / "gdelt_tone.csv"
 
 
 def gdelt_tone():
-    """Dzienny średni ton artykułów anglojęzycznych o bitcoinie (GDELT DOC 2.0, od 2017, bez klucza). Dociągamy tylko ostatnie 3 miesiące."""
+    """Daily average tone of English-language articles about bitcoin (GDELT DOC 2.0, since 2017, no key). We only fetch the last 3 months."""
     old = pd.read_csv(GDELT_CACHE, index_col=0, parse_dates=True)["tone"] if GDELT_CACHE.exists() else pd.Series(dtype=float)
     start = (old.index.max() - pd.Timedelta(days=90)) if len(old) else pd.Timestamp("2017-01-01")
     end = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
-    time.sleep(6)                                                # GDELT: najwyżej jedno zapytanie na 5 s
+    time.sleep(6)                                                # GDELT: at most one request every 5 s
     r = _get("https://api.gdeltproject.org/api/v2/doc/doc", timeout=120, params={
         "query": "bitcoin sourcelang:english", "mode": "timelinetone", "format": "json",
         "startdatetime": start.strftime("%Y%m%d000000"), "enddatetime": end.strftime("%Y%m%d000000")})
     pts = r.json()["timeline"][0]["data"]
     s = pd.Series({pd.Timestamp(p["date"][:8]): float(p["value"]) for p in pts})
-    s = s[s != 0] if len(s) else s                               # 0 = brak artykułów w danym dniu (np. dzień bieżący)
+    s = s[s != 0] if len(s) else s                               # 0 = no articles on that day (e.g. the current day)
     s = s.combine_first(old).sort_index() if len(old) else s.sort_index()
     s.rename("tone").to_csv(GDELT_CACHE)
     return {"x_gdelt_tone": s}
 
 
-JOBS = [("NY Fed (płynność, stopy)", nyfed), ("Skarb USA (TGA)", tga), ("DefiLlama (DeFi, DEX, USDT, USDC)", llama), ("mempool.space (Lightning)", lightning),
-        ("CoinMetrics (giełdy, transakcje)", coinmetrics), ("CFTC (pozycje na innych rynkach)", cftc), ("GFZ (pogoda kosmiczna)", space),
-        ("Hacker News (uwaga techów)", hackernews), ("GDELT (ton newsów o bitcoinie)", gdelt_tone)]
+JOBS = [("NY Fed (liquidity, rates)", nyfed), ("US Treasury (TGA)", tga), ("DefiLlama (DeFi, DEX, USDT, USDC)", llama), ("mempool.space (Lightning)", lightning),
+        ("CoinMetrics (exchanges, transactions)", coinmetrics), ("CFTC (positions in other markets)", cftc), ("GFZ (space weather)", space),
+        ("Hacker News (tech attention)", hackernews), ("GDELT (tone of bitcoin news)", gdelt_tone)]
 
 
 def update(verbose=True):
@@ -237,9 +237,9 @@ def update(verbose=True):
         try:
             r = fn()
             data.update(r)
-            status.append((name, "OK", f"{len(r)} szeregów, {time.time() - t0:.0f}s"))
+            status.append((name, "OK", f"{len(r)} series, {time.time() - t0:.0f}s"))
         except Exception as e:
-            status.append((name, "BŁĄD", str(e)[:120]))
+            status.append((name, "ERROR", str(e)[:120]))
     if verbose:
         for s in status:
             print(f"  [{s[1]:5}] {s[0]}: {s[2]}", flush=True)
@@ -249,7 +249,7 @@ def update(verbose=True):
         new["x_sofr_effr"] = new["x_sofr"] - new["x_effr"]
     merged = new.combine_first(old) if len(old) else new
     merged = merged.sort_index().loc["2011-01-01":]
-    # płynność netto = portfel Fedu − konto rządu − reverse repo (mln USD); szeregi o różnej częstotliwości wyrównane do ostatniej znanej wartości
+    # net liquidity = Fed portfolio - government account - reverse repo (USD millions); series with different frequencies aligned to the last known value
     if {"x_soma", "x_tga", "x_rrp"} <= set(merged.columns):
         idx = pd.date_range("2013-09-23", merged.index.max())
         soma = merged["x_soma"].reindex(idx).ffill(limit=10) / 1e6

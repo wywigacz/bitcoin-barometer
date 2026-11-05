@@ -1,11 +1,11 @@
-"""Cechy, sygnały, wskaźnik złożony i prognozy rozkładu ceny BTC.
+"""Features, signals, the composite indicator and forecasts of the BTC price distribution.
 
-Podejście (zgodne z wnioskami opracowań):
- 1. Wskaźniki -> oceny sygnałów w skali -1..+1 (progi z opracowań), ważone wg wiarygodności.
- 2. Złożony wskaźnik (composite) opisuje fazę rynku (dno/akumulacja <-> przegrzanie).
- 3. Prognoza = rozkład ceny. Skala = zmienność (EWMA), kształt = empiryczne reszty z historii,
-    przesunięcie środka = regresja composite -> przyszły zwrot, włączana TYLKO gdy walk-forward
-    (test na danych "z przyszłości") wykaże przewagę nad prognozą "bez zmian".
+Approach (in line with the findings of published research):
+ 1. Indicators -> signal scores on a -1..+1 scale (thresholds from the research), weighted by reliability.
+ 2. The composite indicator describes the market phase (bottom/accumulation <-> overheating).
+ 3. Forecast = a price distribution. Scale = volatility (EWMA), shape = empirical residuals from history,
+    shift of the center = regression of composite -> future return, switched on ONLY when walk-forward
+    testing (a test on data "from the future") shows it beats the "no change" forecast.
 """
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ import pandas as pd
 import config as C
 
 QS = [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]
-FFILL = {"m2": 21, "fng": 3, "funding": 3, "oi": 3, "dom": 3, "cot_lev": 10}     # CFTC co tydzień: odczyt obowiązuje do następnego
+FFILL = {"m2": 21, "fng": 3, "funding": 3, "oi": 3, "dom": 3, "cot_lev": 10}     # CFTC is weekly: each reading holds until the next one
 
 
 def _col(df, name):
@@ -21,7 +21,7 @@ def _col(df, name):
 
 
 def build_frame(raw):
-    """Ciągła oś dzienna; braki uzupełniane do przodu w rozsądnych limitach."""
+    """Continuous daily axis; gaps are forward-filled within sensible limits."""
     df = raw.sort_index()
     df = df[df["close"].notna()]
     df = df.reindex(pd.date_range(df.index.min(), df.index.max(), freq="D"))
@@ -41,7 +41,7 @@ def features(df):
     f["pi"] = c.rolling(111).mean() / (2 * c.rolling(350).mean())
     mvrv = _col(df, "mvrv")
     f["mvrv"] = mvrv
-    f["realprice"] = c / mvrv                       # Realized Price = cena / MVRV
+    f["realprice"] = c / mvrv                       # Realized Price = price / MVRV
     mr = _col(df, "minerrev")
     f["puell"] = mr.rolling(7).mean() / mr.rolling(365, min_periods=300).mean()
     h = _col(df, "hash")
@@ -108,16 +108,16 @@ def composite(s):
 
 def regime(c):
     if c is None or np.isnan(c):
-        return "brak danych"
+        return "no data"
     if c >= 0.45:
-        return "Bardzo tanio w porównaniu z historią (podobnie jak przy dawnych dołkach cen)"
+        return "Very cheap compared with history (similar to past price bottoms)"
     if c >= 0.15:
-        return "Raczej tanio w porównaniu z historią"
+        return "Fairly cheap compared with history"
     if c > -0.15:
-        return "Cena jest mniej więcej „normalna”"
+        return "The price is roughly “normal”"
     if c > -0.45:
-        return "Raczej drogo w porównaniu z historią"
-    return "Bardzo drogo (podobnie jak przy dawnych szczytach cen)"
+        return "Fairly expensive compared with history"
+    return "Very expensive (similar to past price peaks)"
 
 
 def ewma_vol(c):
@@ -140,7 +140,7 @@ def _fit(x, z):
 
 
 def walk_forward(x, z, H):
-    """Test out-of-sample: model dopasowany tylko na próbkach znanych w chwili t."""
+    """Out-of-sample test: the model is fitted only on samples known at time t."""
     n = len(x)
     ok = ~(np.isnan(x) | np.isnan(z))
     xx, zz = np.where(ok, x, 0.0), np.where(ok, z, 0.0)
@@ -215,7 +215,7 @@ def analyze(df):
         if k in df.columns:
             rk = np.log(df[k].where(df[k] > 0)).diff()
             pair = pd.concat([r, rk], axis=1).tail(120)
-            pair = pair[pair.iloc[:, 1] != 0].dropna().tail(90)      # bez dni bez notowań (weekendy)
+            pair = pair[pair.iloc[:, 1] != 0].dropna().tail(90)      # skip days with no trading (weekends)
             if len(pair) > 30 and pair.iloc[:, 1].std() > 0:
                 corr[k] = float(pair.iloc[:, 0].corr(pair.iloc[:, 1]))
 
