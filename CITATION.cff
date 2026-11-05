@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software or its findings, please cite it as below."
+title: "Bitcoin Barometer: an honest, self-testing Bitcoin price forecast"
+abstract: "Probabilistic Bitcoin price forecasts (7 to 180 days) with walk-forward validation, pre-registered hypotheses, a 2-year holdout exam, prediction-market benchmarking and a public virtual-trader journal, built on free public data and GitHub Actions."
+authors:
+  - family-names: "Wywigacz"
+    given-names: "Przemysław"
+    affiliation: "Life Automation"
+repository-code: "https://github.com/wywigacz/bitcoin-predictor"
+url: "https://wywigacz.github.io/bitcoin-predictor/"
+license: MIT
+date-released: "2026-10-28"
+keywords:
+  - bitcoin
+  - forecasting
+  - probabilistic forecasting
+  - volatility
+  - backtesting
+  - quantitative finance
