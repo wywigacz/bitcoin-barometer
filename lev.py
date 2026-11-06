@@ -18,7 +18,7 @@ import config as C
 
 OUT = C.DATA_DIR / "lev.csv"
 B = "https://data.binance.vision/data/futures/um"
-UA = {"User-Agent": "Mozilla/5.0 (btc-predictor research)"}
+UA = {"User-Agent": "Mozilla/5.0 (bitcoin-barometer research)"}
 M_START = pd.Timestamp("2020-09-01")
 P_START = pd.Timestamp("2020-01-01")
 

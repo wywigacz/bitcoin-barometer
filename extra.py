@@ -12,7 +12,7 @@ import config as C
 
 OUT = C.DATA_DIR / "extra.csv"
 HN_CACHE = C.DATA_DIR / "hn_cache.json"
-UA = {"User-Agent": "btc-predictor/1.0 (research; wywigacz@users.noreply.github.com)"}
+UA = {"User-Agent": "bitcoin-barometer/1.0 (research; wywigacz@users.noreply.github.com)"}
 
 # name -> (label, kind of transform: attn = log level of attention/size, lvl = level/rate, chg = percentage changes of a balance)
 KIND = {

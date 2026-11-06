@@ -26,7 +26,7 @@ def _mon(s):
 
 
 def _fetch_fomc(year_hist=None):
-    h = {"User-Agent": "Mozilla/5.0 btc-predictor"}
+    h = {"User-Agent": "Mozilla/5.0 bitcoin-barometer"}
     out = []
     if year_hist is None:
         t = requests.get("https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm", headers=h, timeout=30).text
@@ -165,7 +165,7 @@ HACKS_CSV = C.DATA_DIR / "hacks.csv"
 def hack_events(min_usd=1e8):
     """Large hacks and thefts (DefiLlama /hacks, keyless) as events in the 'hack' category."""
     try:
-        h = requests.get("https://api.llama.fi/hacks", headers={"User-Agent": "btc-predictor"}, timeout=40).json()
+        h = requests.get("https://api.llama.fi/hacks", headers={"User-Agent": "bitcoin-barometer"}, timeout=40).json()
         df = pd.DataFrame([{"date": pd.Timestamp(int(x["date"]), unit="s").normalize(), "name": x["name"], "usd": x.get("amount") or 0}
                            for x in h if x.get("date")])
         df.to_csv(HACKS_CSV, index=False)

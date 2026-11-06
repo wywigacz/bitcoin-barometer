@@ -18,7 +18,7 @@ import config as C
 RAW = C.DATA_DIR / "markets.csv.gz"
 FEAT = C.DATA_DIR / "market_features.csv"
 SP500 = C.DATA_DIR / "sp500.csv"
-UA = {"User-Agent": "Mozilla/5.0 (btc-predictor)"}
+UA = {"User-Agent": "Mozilla/5.0 (bitcoin-barometer)"}
 
 ETF = {
     # bonds
@@ -86,7 +86,7 @@ def intl_list():
     rows = []
     for idx, (page, col, fx, country) in INTL.items():
         try:
-            r = requests.get(f"https://en.wikipedia.org/wiki/{page}", headers={"User-Agent": "btc-predictor/1.0 (research; wywigacz@users.noreply.github.com)"}, timeout=40)
+            r = requests.get(f"https://en.wikipedia.org/wiki/{page}", headers={"User-Agent": "bitcoin-barometer/1.0 (research; wywigacz@users.noreply.github.com)"}, timeout=40)
             tabs = [t for t in pd.read_html(io.StringIO(r.text)) if col in map(str, t.columns)]
             t = max(tabs, key=len)
             nc = next((c for c in NAME_COLS if c in t.columns), None)
@@ -107,7 +107,7 @@ def intl_list():
 def sp500_list():
     try:
         r = requests.get("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
-                         headers={"User-Agent": "btc-predictor/1.0 (research; wywigacz@users.noreply.github.com)"}, timeout=40)
+                         headers={"User-Agent": "bitcoin-barometer/1.0 (research; wywigacz@users.noreply.github.com)"}, timeout=40)
         t = pd.read_html(io.StringIO(r.text))[0][["Symbol", "Security", "GICS Sector"]]
         t["Symbol"] = t["Symbol"].str.replace(".", "-", regex=False)
         t.to_csv(SP500, index=False)

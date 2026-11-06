@@ -13,7 +13,7 @@ import requests
 import config as C
 
 CACHE = C.DATA_DIR / "news_cache.json"
-UA = {"User-Agent": "btc-predictor/1.0 (research; wywigacz@users.noreply.github.com)"}
+UA = {"User-Agent": "bitcoin-barometer/1.0 (research; wywigacz@users.noreply.github.com)"}
 GDELT_FROM = pd.Timestamp("2017-01-01")
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 

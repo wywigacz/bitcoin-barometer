@@ -17,7 +17,7 @@ import config as C
 DIR = C.DATA_DIR / "worldlog"
 DAILY = C.DATA_DIR / "worldlog_daily.csv"
 START = pd.Timestamp("2011-08-17")
-UA = {"User-Agent": "btc-predictor/1.0 (research; wywigacz@users.noreply.github.com)"}
+UA = {"User-Agent": "bitcoin-barometer/1.0 (research; wywigacz@users.noreply.github.com)"}
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
 CATS = {  # Wikipedia heading -> short key

@@ -1,4 +1,4 @@
-"""BTC predictor: update data -> analysis -> forecasts -> dashboard.
+"""Bitcoin Barometer: update data -> analysis -> forecasts -> dashboard.
 
   python run.py                    incremental update (default)
   python run.py --full             download the full history from scratch
@@ -40,7 +40,7 @@ import whales
 import world
 import worldlog
 
-TASK = "BTC-Predictor"
+TASK = "Bitcoin-Barometer"
 
 
 def update(full=False):

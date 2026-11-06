@@ -15,7 +15,7 @@ import markets as MK
 
 WORLD_CSV = C.DATA_DIR / "world.csv"
 FAILS = C.DATA_DIR / "world_fails.json"
-UA = {"User-Agent": "btc-predictor/1.0 (research; wywigacz@users.noreply.github.com)"}
+UA = {"User-Agent": "bitcoin-barometer/1.0 (research; wywigacz@users.noreply.github.com)"}
 
 # name -> (Yahoo symbol, label)
 YAHOO = {

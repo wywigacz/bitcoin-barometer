@@ -6,8 +6,8 @@ authors:
   - family-names: "Wywigacz"
     given-names: "Przemysław"
     affiliation: "Life Automation"
-repository-code: "https://github.com/wywigacz/bitcoin-predictor"
-url: "https://wywigacz.github.io/bitcoin-predictor/"
+repository-code: "https://github.com/wywigacz/bitcoin-barometer"
+url: "https://wywigacz.github.io/bitcoin-barometer/"
 license: MIT
 date-released: "2026-10-28"
 keywords:

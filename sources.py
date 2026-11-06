@@ -5,7 +5,7 @@ import time
 import pandas as pd
 import requests
 
-UA = {"User-Agent": "Mozilla/5.0 (btc-predictor)"}
+UA = {"User-Agent": "Mozilla/5.0 (bitcoin-barometer)"}
 
 
 def _get(url, timeout=30, tries=3):

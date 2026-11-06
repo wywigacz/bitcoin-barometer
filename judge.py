@@ -22,7 +22,7 @@ import touch as TO
 
 POLY = C.DATA_DIR / "poly_markets.csv"
 KLIVE = C.DATA_DIR / "judge_live.csv"
-UA = {"User-Agent": "Mozilla/5.0 (btc-predictor research)"}
+UA = {"User-Agent": "Mozilla/5.0 (bitcoin-barometer research)"}
 SLUG = re.compile(r"what-price-will-(btc|bitcoin)-(reach|hit|dip)")
 HOLDOUT = pd.Timestamp("2024-10-29")
 

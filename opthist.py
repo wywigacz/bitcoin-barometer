@@ -20,7 +20,7 @@ import config as C
 
 OUT = C.DATA_DIR / "opt_hist.csv"
 URL = "https://history.deribit.com/api/v2/public/get_last_trades_by_currency_and_time"
-UA = {"User-Agent": "Mozilla/5.0 (btc-predictor research)"}
+UA = {"User-Agent": "Mozilla/5.0 (bitcoin-barometer research)"}
 START = pd.Timestamp("2018-01-01")
 SLICES = (0, 8, 16)
 

@@ -6,21 +6,21 @@
 
 **An honest, self-testing Bitcoin price forecast: ranges instead of guesses, explained like a weather report.**
 
-[![Update forecasts](https://github.com/wywigacz/bitcoin-predictor/actions/workflows/update.yml/badge.svg)](https://github.com/wywigacz/bitcoin-predictor/actions/workflows/update.yml)
-[![Live dashboard](https://img.shields.io/badge/live-dashboard-ffb347)](https://wywigacz.github.io/bitcoin-predictor/)
+[![Update forecasts](https://github.com/wywigacz/bitcoin-barometer/actions/workflows/update.yml/badge.svg)](https://github.com/wywigacz/bitcoin-barometer/actions/workflows/update.yml)
+[![Live dashboard](https://img.shields.io/badge/live-dashboard-ffb347)](https://wywigacz.github.io/bitcoin-barometer/)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776ab)
 ![No API keys](https://img.shields.io/badge/API%20keys-none-4fd8b0)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/wywigacz/bitcoin-predictor?style=social)](https://github.com/wywigacz/bitcoin-predictor/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/wywigacz/bitcoin-barometer?style=social)](https://github.com/wywigacz/bitcoin-barometer/stargazers)
 
-[**Live dashboard**](https://wywigacz.github.io/bitcoin-predictor/) ·
-[**Trader journal**](https://wywigacz.github.io/bitcoin-predictor/journal.html) ·
+[**Live dashboard**](https://wywigacz.github.io/bitcoin-barometer/) ·
+[**Trader journal**](https://wywigacz.github.io/bitcoin-barometer/journal.html) ·
 [Key findings](#key-findings) ·
 [How it works](#how-it-works) ·
 [Quick start](#quick-start) ·
 [Research log](PLAN.md)
 
-<a href="https://wywigacz.github.io/bitcoin-predictor/">
+<a href="https://wywigacz.github.io/bitcoin-barometer/">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/img/dashboard-dark.png">
     <img src="docs/img/dashboard-light.png" alt="Bitcoin Barometer dashboard: current price, market score gauge and the most likely price range for the next month" width="900">
@@ -113,8 +113,8 @@ A detailed tour of every module is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.m
 ## Quick start
 
 ```bash
-git clone https://github.com/wywigacz/bitcoin-predictor.git
-cd bitcoin-predictor
+git clone https://github.com/wywigacz/bitcoin-barometer.git
+cd bitcoin-barometer
 pip install -r requirements.txt
 python run.py            # incremental update + analysis + dashboard (docs/index.html)
 python run.py --full     # rebuild the full history from scratch
